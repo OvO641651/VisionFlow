@@ -1,0 +1,452 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1406</width>
+    <height>716</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <widget class="QWidget" name="layoutWidget">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>10</y>
+      <width>632</width>
+      <height>102</height>
+     </rect>
+    </property>
+    <layout class="QHBoxLayout" name="horizontalLayout">
+     <item>
+      <widget class="QPushButton" name="menu_button">
+       <property name="minimumSize">
+        <size>
+         <width>100</width>
+         <height>90</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>100</width>
+         <height>90</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>菜单</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="camera_button">
+       <property name="minimumSize">
+        <size>
+         <width>100</width>
+         <height>90</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>100</width>
+         <height>90</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>启动</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="close_button">
+       <property name="minimumSize">
+        <size>
+         <width>100</width>
+         <height>90</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>100</width>
+         <height>90</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>停止</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="open_button">
+       <property name="minimumSize">
+        <size>
+         <width>100</width>
+         <height>90</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>100</width>
+         <height>90</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>打开</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btn_step_execute">
+       <property name="minimumSize">
+        <size>
+         <width>100</width>
+         <height>90</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>100</width>
+         <height>90</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>单步执行</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btn_continuous_execute">
+       <property name="minimumSize">
+        <size>
+         <width>100</width>
+         <height>90</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>100</width>
+         <height>90</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>连续执行</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+   <widget class="QTreeWidget" name="tree">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>120</y>
+      <width>161</width>
+      <height>431</height>
+     </rect>
+    </property>
+    <column>
+     <property name="text">
+      <string>项目</string>
+     </property>
+    </column>
+    <item>
+     <property name="text">
+      <string>检测</string>
+     </property>
+     <item>
+      <property name="text">
+       <string>直线</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>圆</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>灰度</string>
+      </property>
+     </item>
+    </item>
+    <item>
+     <property name="text">
+      <string>识别</string>
+     </property>
+     <item>
+      <property name="text">
+       <string>人脸</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>颜色</string>
+      </property>
+     </item>
+    </item>
+    <item>
+     <property name="text">
+      <string>新建项目</string>
+     </property>
+    </item>
+   </widget>
+   <widget class="QPlainTextEdit" name="plainTextEdit">
+    <property name="geometry">
+     <rect>
+      <x>550</x>
+      <y>570</y>
+      <width>301</width>
+      <height>91</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QTabWidget" name="tabWidget">
+    <property name="geometry">
+     <rect>
+      <x>540</x>
+      <y>120</y>
+      <width>621</width>
+      <height>421</height>
+     </rect>
+    </property>
+    <property name="currentIndex">
+     <number>0</number>
+    </property>
+    <widget class="QWidget" name="Video">
+     <attribute name="title">
+      <string>Video</string>
+     </attribute>
+     <layout class="QVBoxLayout" name="verticalLayout_2">
+      <item>
+       <layout class="QVBoxLayout" name="video_area_layout" stretch="1,1">
+        <item>
+         <widget class="QLabel" name="video">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">background-color: black;
+color: white;
+font-size: 24px;
+font-weight: bold;</string>
+          </property>
+          <property name="text">
+           <string>video</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QTabWidget" name="result_tab_widget">
+          <property name="currentIndex">
+           <number>0</number>
+          </property>
+          <widget class="QWidget" name="current_result_tab">
+           <attribute name="title">
+            <string>当前结果</string>
+           </attribute>
+           <layout class="QVBoxLayout" name="verticalLayout_3">
+            <item>
+             <widget class="QTableWidget" name="result_data_table">
+              <property name="columnCount">
+               <number>4</number>
+              </property>
+              <column>
+               <property name="text">
+                <string>执行序号</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>执行时间</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>模块</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>结果数据</string>
+               </property>
+              </column>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="history_result_tab">
+           <attribute name="title">
+            <string>历史结果</string>
+           </attribute>
+           <layout class="QVBoxLayout" name="verticalLayout_4">
+            <item>
+             <widget class="QLabel" name="label_2">
+              <property name="text">
+               <string>暂无历史记录</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="help_tab">
+           <attribute name="title">
+            <string>帮助</string>
+           </attribute>
+           <layout class="QVBoxLayout" name="verticalLayout_5">
+            <item>
+             <widget class="QLabel" name="label_3">
+              <property name="text">
+               <string>帮助信息显示区域</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+    <widget class="QWidget" name="tab">
+     <attribute name="title">
+      <string>Video2</string>
+     </attribute>
+    </widget>
+   </widget>
+   <widget class="QTabWidget" name="flowWidget">
+    <property name="geometry">
+     <rect>
+      <x>180</x>
+      <y>120</y>
+      <width>351</width>
+      <height>471</height>
+     </rect>
+    </property>
+    <property name="currentIndex">
+     <number>0</number>
+    </property>
+    <widget class="QWidget" name="flow">
+     <attribute name="title">
+      <string>Flow</string>
+     </attribute>
+     <widget class="QGraphicsView" name="flowView">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>10</y>
+        <width>301</width>
+        <height>381</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_current_node">
+      <property name="geometry">
+       <rect>
+        <x>30</x>
+        <y>410</y>
+        <width>291</width>
+        <height>21</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>未选中节点</string>
+      </property>
+     </widget>
+    </widget>
+    <widget class="QWidget" name="tab_4">
+     <attribute name="title">
+      <string>流程图2</string>
+     </attribute>
+    </widget>
+   </widget>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1406</width>
+     <height>40</height>
+    </rect>
+   </property>
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Fixed" vsizetype="Minimum">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
+   <property name="minimumSize">
+    <size>
+     <width>0</width>
+     <height>40</height>
+    </size>
+   </property>
+   <property name="maximumSize">
+    <size>
+     <width>16777215</width>
+     <height>50</height>
+    </size>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>15</pointsize>
+    </font>
+   </property>
+   <widget class="QMenu" name="menu">
+    <property name="geometry">
+     <rect>
+      <x>246</x>
+      <y>140</y>
+      <width>157</width>
+      <height>130</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>15</pointsize>
+     </font>
+    </property>
+    <property name="title">
+     <string>设置</string>
+    </property>
+    <addaction name="action"/>
+    <addaction name="action1"/>
+   </widget>
+   <addaction name="menu"/>
+  </widget>
+  <action name="action">
+   <property name="text">
+    <string>摄像头设置</string>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>15</pointsize>
+    </font>
+   </property>
+  </action>
+  <action name="action1">
+   <property name="text">
+    <string>1</string>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>15</pointsize>
+    </font>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
