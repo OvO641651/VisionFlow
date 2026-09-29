@@ -10,17 +10,22 @@ from PySide2.QtCore import QTimer, Qt, QPointF # 图像显示需要设置线程�
 
 import cv2
 import time
+import os
 
 from Detector import DetectorShape
 from FlowChart import NodeItem, EdgeItem, FlowchartView
 from LineParamsDialog import LineParamsDialog
 from CircleParamsDialog import CircleParamsDialog
 from ImageGraphicsView import ImageGraphicsView
+from ImageGalleryWidget import ImageGalleryWidget
 
 
 uiloader = QUiLoader()
 
 class MainWindow:
+    # 视频 / 摄像头也当成一个"图片槽"，参数单独存一份，与图片的运行参数分开
+    VIDEO_ROI_KEY = "video"
+
     def __init__(self):
         self.abc = 1
         # 设置主窗口
@@ -38,6 +43,15 @@ class MainWindow:
 
         # 存储当前加载的静态图片，用于删除方框后恢复原图
         self.current_static_image = None
+
+        # 当前图片的标识，用于"参数和检测结果按图片分别保存"
+        # 静态图片用 id(原图)；视频/摄像头统一用 VIDEO_ROI_KEY；None 表示还没有显示过任何图片/视频
+        self.current_image_key = None
+
+        # 每张图片上一次的执行结果缓存
+        # 结构：{图片标识: {"frame": 画好检测结果的图, "data": 检测数据, "exec_info": 执行日志}}
+        # 切换回某张图片时，如果这里存着它上一次的结果，就直接显示出来，不用再点执行按钮
+        self.result_cache = {}
 
         # 初始化选中节点变量，用来显示当前单击选中的节点
         self.selected_node = None
@@ -144,6 +158,15 @@ class MainWindow:
             self.execution_log.verticalHeader().setVisible(False)
 
 
+        # 初始化 图像预览进度条 QListWidget 控件，控件名字 Name 为 image_gallery
+        self.image_gallery = self.main_window.findChild(QtWidgets.QListWidget, "image_gallery")
+        if self.image_gallery:
+            # 实例化逻辑类，传入 UI 控件自身
+            self.gallery_widget = ImageGalleryWidget(self.image_gallery)
+            # 连接图库点击信号到主窗口的显示函数
+            self.gallery_widget.image_selected.connect(self._on_gallery_image_selected)
+
+
 
     def print_aaa(self):
         self.abc = 2
@@ -152,7 +175,7 @@ class MainWindow:
     def open_file(self):
         """点击打开按钮后弹出文件选择框，可以选择图片或者视频进行导入"""
         '''
-        QFileDialog.getOpenFileName()函数:
+        QFileDialog.getOpenFileNames()函数（注意结尾有 s，表示可以多选）:
         parent:main_window, 
         caption:打卡的界面的名字, 
         dir:默认选择的文件目录(默认不选择), 
@@ -160,23 +183,110 @@ class MainWindow:
         option:对话框选项标注
         返回 file_path, _ :选中文件的绝对路径；选择的文件的名称(_表示忽略)
         '''
-        file_path, _ = QFileDialog.getOpenFileName(
+        file_paths, _ = QFileDialog.getOpenFileNames(
             self.main_window,
             "选择图片或视频",
             "",
             "图片文件 (*.png *.jpg *.jpeg *.bmp);;视频文件 (*.mp4 *.avi *.mkv);;所有文件(*.*)"
         )
-        if not file_path:
+        if not file_paths:
+            # 用户点了取消，或者一个文件都没有选中
             return
 
         # 无论当前是播放摄像头还是视频，先关闭释放资源
         self.close_camera()
 
-        ext = file_path.lower() # 将获得的绝对路径转换成小写 PNG->png
+        # 把选中的文件按后缀分成 图片 / 视频 两类
+        image_exts = ('.png', '.jpg', '.jpeg', '.bmp')
+        video_exts = ('.mp4', '.avi', '.mkv')
+        image_paths = [p for p in file_paths if p.lower().endswith(image_exts)]
+        video_paths = [p for p in file_paths if p.lower().endswith(video_exts)]
+
+        # 1、选中了视频：只播放视频（视频和静态图片不能混着处理）
+        if video_paths:
+            if image_paths:
+                # 同时选了图片和视频时只播放视频，避免静态图片和视频状态互相干扰
+                QMessageBox.information(
+                    self.main_window, "提示",
+                    "选中的文件里既有图片又有视频，这里只播放视频，图片已忽略。"
+                )
+            if len(video_paths) > 1:
+                # 一次只能播放一个视频，多选的只打开第一个
+                QMessageBox.information(
+                    self.main_window, "提示",
+                    "一次只能播放一个视频，将打开第一个：\n" + os.path.basename(video_paths[0])
+                )
+            video_path = video_paths[0]
+            # 处理视频文件
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                # 如果读取视频失败，则弹出小窗口警告
+                QMessageBox.warning(self.main_window, "错误", "无法打开视频文件")
+                return
+            self.cap = cap
+            self._is_video_file = True
+
+            # 视频是独立的一个"图片槽"，把各节点的运行参数切到它自己那一份
+            self._switch_image_params(self.VIDEO_ROI_KEY)
+
+            # 启动定时器循环读取视频帧，每隔 30ms 自动执行一次 update_frame
+            if self.timer is not None:
+                # 清除旧的定时器
+                self.timer.stop()
+                self.timer = None
+            self.timer = QTimer()  # 创建新的定时器
+            # 绑定处理函数
+            self.timer.timeout.connect(self.update_frame)  # type:ignore
+            self.timer.start(30)  # 30帧fps
+            return
+
+        # 2、选中了图片：批量导入（一张也可以）
+        if image_paths:
+            # 批量读取图片，读取失败的单独记下来，最后一起提示
+            loaded_frames = []
+            failed_names = []
+            for image_path in image_paths:
+                frame = cv2.imread(image_path)  # 读取图片
+                if frame is None:
+                    # 单张读取失败不影响其它图片，先记下文件名，最后统一提示
+                    failed_names.append(os.path.basename(image_path))
+                    continue
+                loaded_frames.append(frame)
+                # 把读取到的图片加到图库里
+                if hasattr(self, 'gallery_widget'):
+                    self.gallery_widget.add_image(frame)
+
+            if not loaded_frames:
+                # 一张都没读进来，直接提示并结束
+                QMessageBox.warning(self.main_window, "错误", "无法读取选中的图片文件")
+                return
+            if failed_names:
+                # 有部分图片读取失败，提示用户哪些被跳过了
+                QMessageBox.warning(
+                    self.main_window, "警告",
+                    "以下图片读取失败，已跳过：\n" + "\n".join(failed_names)
+                )
+
+            # 批量导入时主画面默认显示第一张，其余的点击图库缩略图切换
+            # 新导入的图片还没有执行过，所以这里只显示原图
+            self._show_static_image(loaded_frames[0])
+
+            # 如果此时刚好有配置窗口开着，通知它刷新尺寸为图片的实际大小
+            if self.current_dialog and self.current_dialog.isVisible():
+                self.current_dialog.refresh_size()
+            return
+
+        # 3、剩下的都是不支持的类型
+        QMessageBox.warning(self.main_window, "错误", "不支持的文件格式")
+
+
+        '''
+        """只处理一幅图片 或 一个视频的方式"""
+        ext = file_paths.lower() # 将获得的绝对路径转换成小写 PNG->png
         # endswith:检测后缀
         if ext.endswith(('.png', '.jpg', '.jpeg', '.bmp')):
             # 处理单张图片
-            frame = cv2.imread(file_path) # 读取图片
+            frame = cv2.imread(file_paths) # 读取图片
             if frame is None:
                 # 如果读取图片失败，则弹出小窗口警告
                 QMessageBox.warning(self.main_window, "错误", "无法读取图片文件")
@@ -188,13 +298,17 @@ class MainWindow:
             # 单张图片不需要循环，直接处理并显示
             self._process_and_display_frame(frame)
 
+            # 把读取到的图片加到图库里
+            if hasattr(self, 'gallery_widget'):
+                self.gallery_widget.add_image(frame)
+
             # 如果此时刚好有配置窗口开着，通知它刷新尺寸为图片的实际大小
             if self.current_dialog and self.current_dialog.isVisible():
                 self.current_dialog.refresh_size()
 
         elif ext.endswith(('.mp4', '.avi', '.mkv')):
             # 处理视频文件
-            cap = cv2.VideoCapture(file_path)
+            cap = cv2.VideoCapture(file_paths)
             if not cap.isOpened():
                 # 如果读取视频失败，则弹出小窗口警告
                 QMessageBox.warning(self.main_window, "错误", "无法打开视频文件")
@@ -214,7 +328,145 @@ class MainWindow:
         else:
             # 既不是图片也不是视频时，弹出小窗口警告
             QMessageBox.warning(self.main_window, "错误", "不支持的文件格式")
+        '''
 
+
+    def _get_node_params_store(self, node):
+        """
+        取出某个节点"按图片分别保存的运行参数"字典，没有就现场建一个。
+        结构：{图片标识: {参数名: 参数值, ...}}（整份 node.params 的副本）
+        """
+        store = getattr(node, 'params_per_image', None)
+        if store is None:
+            store = {}
+            node.params_per_image = store
+        return store
+
+    def _switch_image_params(self, new_key):
+        """
+        切换当前图片时，把每个节点的运行参数按图片分别存档 / 载入。
+
+        存档的是节点参数的全部内容：ROI 的 XYHW / XYR（含形状、是否隐藏黄框），以及运行参数，所以每张图片的参数完全独立，互不继承。。
+
+        :param new_key: 新图片的标识。静态图片用 id(原图)，视频/摄像头用 VIDEO_ROI_KEY。
+        """
+        if new_key == self.current_image_key:
+            # 还是同一张图片
+            return
+
+        old_key = self.current_image_key
+        for node in self.flow_nodes:
+            store = self._get_node_params_store(node)
+
+            # 先把当前这整套参数存到上一张图片名下（空字典则不存）
+            if old_key is not None:
+                saved_old = dict(node.params)
+                if saved_old:
+                    store[old_key] = saved_old
+
+            # 把参数清空，这样新图片会自动回到它自己的参数；
+            node.params.clear()
+
+            # 这张图片之前设置过，就把属于它自己的整套参数恢复回来
+            saved_new = store.get(new_key)
+            if saved_new:
+                node.params.update(saved_new)
+
+        self.current_image_key = new_key
+
+    def _show_static_image(self, frame):
+        """
+        显示一张静态图片（导入图片、点击图库缩略图切换图片时调用）。
+        规则：
+            这张图片之前点过"单步执行"/"连续执行" -> 直接显示它上一次的检测结果，不用再点执行按钮；
+            这张图片还没执行过 -> 只显示原图，不显示任何检测结果。
+        另外，切换图片时会把每个节点的运行参数（ROI + 算法参数）按图片分别存档 / 载入，
+        所以每张图片的参数也是独立的。
+
+        :param frame: OpenCV BGR 原图（内部只用副本，不会污染原图）。
+        """
+        if frame is None:
+            return
+
+        # 记住当前图片，后面点执行按钮都是基于它计算
+        self.current_static_image = frame
+
+        # 切换图片：把每个节点的运行参数按图片分别存档 / 载入
+        self._switch_image_params(id(frame))
+
+        # 传 id(frame) 作为图片标识，保证每张图片的缩放互相独立
+        image_key = id(frame)
+
+        # 取这张图片上一次的执行结果
+        cached = self.result_cache.get(image_key)
+        if cached is not None:
+            # 有缓存：直接显示上次画好检测结果的那张图
+            self._display_image(cached["frame"], image_key)
+            # 顺便把"上次检测数据"和日志表格也同步过来，保证和画面对得上
+            self.last_detected_data = cached["data"]
+            self._update_execution_log(cached["exec_info"] or [])
+            return
+
+        # 没有缓存（这张图片还没执行过）：只显示原图
+        self._display_image(frame.copy(), image_key)
+
+        # 没执行过就没有检测结果，把上一次的数据和日志一并清空
+        self.last_detected_data = None
+        self._update_execution_log([])
+
+    def _execute_static(self, frame, mode, node=None):
+        """
+        对一张静态图片执行检测并把结果显示出来。
+        只有"单步执行"、"连续执行"两个按钮会调用它。
+        执行完会把结果按图片缓存起来（见 self.result_cache），
+        以后再切回这张图片时可以直接显示这次的结果，不用再点按钮。
+
+        :param frame: OpenCV BGR 原图。
+        :param mode: "step" 单步执行（只跑 node 这一个节点）；"continuous" 连续执行（跑整个流程图）。
+        :param node: 单步执行时要执行的节点。
+        :return: 检测到的数据列表 data。
+        """
+        # 保证"当前静态图片"就是这次要算的图，后面再点执行按钮时用的还是它
+        self.current_static_image = frame
+
+        # 复制图像处理，防止污染原图
+        work_frame = frame.copy()
+        # 单步执行不产生执行日志，这里先占位为 None
+        exec_info = None
+
+        if mode == "continuous":
+            # 调用连续执行_run_flow_pipeline，接收返回的 data 和日志 exec_info
+            work_frame, data, exec_info = self._run_flow_pipeline(work_frame)
+            # 更新执行日志表格
+            self._update_execution_log(exec_info)
+        else:
+            # 调用单步执行_run_flow_pipeline_step，只执行 node 这一个节点
+            work_frame, data = self._run_flow_pipeline_step(work_frame, node)
+
+        # 显示处理后的图像；传 id(frame) 让每张图片的缩放互相独立
+        self._display_image(work_frame, id(frame))
+
+        # 把这次的结果缓存到这张图片名下,下次切回这张图片时可以直接显示，不用再点一次执行按钮。
+        # work_frame 本来就是 frame 的独立副本，直接存起来即可。
+        self.result_cache[id(frame)] = {
+            "frame": work_frame,
+            "data": data,
+            "exec_info": exec_info,
+        }
+
+        # 保存数据并同步窗口
+        self.last_detected_data = data  # 保存给以后打开的窗口使用
+        if self.current_dialog and self.current_dialog.isVisible():
+            self.current_dialog.update_result_count(data)
+
+        return data
+
+
+    '''
+    """
+    使用_show_static_image()和_execute_static()函数代替_process_and_display_frame()函数
+    实现只有点过"单步执行"/"连续执行"之后才显示图像绘制结果的功能
+    """
     def _process_and_display_frame(self, frame):
         """按流程图或树状图模式处理一帧图像，并渲染到 graphicsView_video"""
         # 与 update_frame 函数基本相同
@@ -223,7 +475,7 @@ class MainWindow:
         # 拷贝一份图像，修复删除方框后对应的检测内容依然在图片上显示的bug
         work_frame = frame.copy()
 
-        '''通过 树状图 设置检测不同的内容'''
+        """通过 树状图 设置检测不同的内容"""
         if self.flow_nodes:
             # 三个值解包，忽略 exec_info
             work_frame, data, _ = self._run_flow_pipeline(work_frame)
@@ -233,13 +485,19 @@ class MainWindow:
 
         # 调用抽取出来的显示函数，也可以直接将该函数的内容放到这里
         self._display_image(work_frame)
+        '''
 
-    def _display_image(self, img):
-        """将 OpenCV 图像转换并渲染到 UI 的 QGraphicsView 上"""
+    def _display_image(self, img, image_key=None):
+        """
+        将 OpenCV 图像转换并渲染到 UI 的 QGraphicsView 上
+        :param image_key: 静态图片的标识（用 id(原图) 传入）。
+                          传入后这张图片的缩放 / 平移会被单独记住，各图片互不影响；
+                          不传（视频 / 摄像头的连续帧）时保持当前缩放不变。
+        """
         if not hasattr(self, 'image_view'):
             return
         # 直接调用自定义视图 ImageGraphicsView 类的 set_image 方法，无需手动缩放
-        self.image_view.set_image(img)
+        self.image_view.set_image(img, image_key)
 
 
     def open_camera(self):
@@ -253,6 +511,11 @@ class MainWindow:
             QMessageBox.warning(self.main_window, "错误", "无法打开摄像头，请检查设备连接")
             self.cap = None
             return
+
+
+        # 摄像头/视频是独立的一个"图片槽"，把各节点的运行参数切到它自己那一份
+        self._switch_image_params(self.VIDEO_ROI_KEY)
+
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame) # type: ignore
@@ -279,6 +542,9 @@ class MainWindow:
             self.image_view.scene().clear()
             # 将 pixmap_item 重置为 None，防止下次打开图片时残留引用出错
             self.image_view.pixmap_item = None
+
+            # 顺便把缩放/平移复位，避免下次显示图片或视频时沿用上一次的缩放
+            self.image_view.reset_zoom()
 
 
     def update_frame(self):
@@ -683,8 +949,11 @@ class MainWindow:
         #QTimer.singleShot(0, self.update_all_edges)
 
         # 如果当前有静态图片，立刻用更新后的流程图重绘
+        '''
+        # 连线后不自动在图片中绘制结果，需要点击执行按钮后才能显示结果
         if self.current_static_image is not None:
             self._process_and_display_frame(self.current_static_image)
+        '''
 
         return node
 
@@ -700,8 +969,11 @@ class MainWindow:
         self.update_all_edges() # 刷新一次画面，刷新出曲线
 
         # 如果当前有静态图片，立刻用更新后的流程图重绘
+        '''
+        # 连线后不自动在图片中绘制结果，需要点击执行按钮后才能显示结果
         if self.current_static_image is not None:
             self._process_and_display_frame(self.current_static_image)
+        '''
 
     def delete_flow_node(self, node_to_delete):
         """实现删除与需要删除的节点相连接的曲线"""
@@ -722,8 +994,11 @@ class MainWindow:
         self.update_all_edges() # 刷新画面
 
         # 如果当前有静态图片，立刻用更新后的流程图重绘
+        '''
+        # 连线后不自动在图片中绘制结果，需要点击执行按钮后才能显示结果
         if self.current_static_image is not None:
             self._process_and_display_frame(self.current_static_image)
+        '''
 
     def update_all_edges(self):
         """可更新的边缘连接曲线，移动方框后曲线会跟着移动"""
@@ -776,8 +1051,11 @@ class MainWindow:
         self.update_all_edges() # 刷新画面
 
         # 如果当前有静态图片，立刻用更新后的流程图重绘
+        '''
+        # 连线后不自动在图片中绘制结果，需要点击执行按钮后才能显示结果
         if self.current_static_image is not None:
             self._process_and_display_frame(self.current_static_image)
+        '''
 
     def on_node_double_clicked(self, node):
         """双击流程图方框时触发的函数"""
@@ -836,6 +1114,8 @@ class MainWindow:
 
         # 处理静态图片模式
         if self.current_static_image is not None:
+            '''
+            """这一部分内容均在_execute_static()函数中完成"""
             # 复制图像处理，防止污染原图
             work_frame = self.current_static_image.copy()
             # 仅执行选中的这个节点，调用单步执行_run_flow_pipeline_step函数
@@ -847,7 +1127,10 @@ class MainWindow:
             self.last_detected_data = data  # 保存给以后打开的窗口使用
             if self.current_dialog and self.current_dialog.isVisible():
                 self.current_dialog.update_result_count(data)
-
+            return
+            '''
+            # 仅执行选中的这个节点；计算、显示、保存数据都在 _execute_static 里完成
+            self._execute_static(self.current_static_image, "step", self.selected_node)
             return
 
         # 处理视频 / 摄像头模式
@@ -866,6 +1149,8 @@ class MainWindow:
 
         # 静态图片模式：直接完整执行一次
         if self.current_static_image is not None:
+            '''      
+            """这一部分均在_execute_static()函数中执行"""
             # 复用现有的完整图执行逻辑
             # self._process_and_display_frame(self.current_static_image)
             # 将上面的一行代码换成下面的一行
@@ -875,12 +1160,14 @@ class MainWindow:
             # 更新日志
             self._update_execution_log(exec_info)
             self._display_image(work_frame)
-
             # 保存数据并同步窗口
             self.last_detected_data = data  # 保存给以后打开的窗口使用
             if self.current_dialog and self.current_dialog.isVisible():
                 self.current_dialog.update_result_count(data)
-
+            return
+            '''
+            # 计算、显示、刷新日志表格都在 _execute_static 里完成
+            self._execute_static(self.current_static_image, "continuous")
             return
 
         # 视频 / 摄像头模式
@@ -915,6 +1202,17 @@ class MainWindow:
                 # 将表格项放入指定行和列的单元格中
                 # 如果该单元格已有内容，会自动替换；如果之前没有，会创建新单元格
                 self.execution_log.setItem(row, col, item)
+
+
+    def _on_gallery_image_selected(self, img_bgr):
+        """
+        当用户点击图库中的图片时，切换主画面显示
+        这张图片以前执行过 -> 直接显示它上一次的检测结果（不用再点执行按钮）；
+        这张图片没执行过   -> 只显示原图，不显示检测结果。
+        同时，每个节点在这张图片上设置过的运行参数（ROI + 算法参数）会被恢复。
+        """
+        if img_bgr is not None:
+            self._show_static_image(img_bgr)
 
 
 

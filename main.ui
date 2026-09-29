@@ -235,7 +235,7 @@
          </widget>
         </item>
         <item>
-         <layout class="QVBoxLayout" name="verticalLayout_2" stretch="2,1">
+         <layout class="QVBoxLayout" name="verticalLayout_2" stretch="10,1,5">
           <item>
            <widget class="QTabWidget" name="tabWidget">
             <property name="currentIndex">
@@ -256,6 +256,22 @@
               <string>Video2</string>
              </attribute>
             </widget>
+           </widget>
+          </item>
+          <item>
+           <widget class="QListWidget" name="image_gallery">
+            <property name="flow">
+             <enum>QListView::LeftToRight</enum>
+            </property>
+            <property name="resizeMode">
+             <enum>QListView::Adjust</enum>
+            </property>
+            <property name="spacing">
+             <number>10</number>
+            </property>
+            <property name="viewMode">
+             <enum>QListView::IconMode</enum>
+            </property>
            </widget>
           </item>
           <item>
