@@ -38,11 +38,24 @@ class ImageGraphicsView(QGraphicsView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-    def set_image(self, cv_img):
+        # ===== 新增：让每张图片的放大缩小互相独立 =====
+        # 存放每张图片各自的缩放 / 平移状态。
+        #   键：图片标识（主窗口通过 image_key 传进来，用的是 id(原图)）
+        #   值：(QTransform 缩放矩阵, 视图中心对应的场景坐标)
+        self._zoom_states = {}
+        # 当前正在显示的图片标识；None 表示当前是视频/摄像头帧，或者还没显示过静态图片
+        self._current_key = None
+
+    def set_image(self, cv_img, image_key=None):
         """
-        设置并显示一幅 OpenCV 格式的图像（BGR 格式）,将 OpenCV 图像转换并渲染到 UI 的 videoLabel 上
+        设置并显示一幅 OpenCV 格式的图像（BGR 格式）
         OpenCV BGR -> RGB : qt和opencv使用的颜色通道顺序不同，所以需要转换
         :param cv_img: numpy 数组，OpenCV 读取的 BGR 图像
+        :param image_key: 静态图片的标识（主窗口用 id(原图) 传进来）。
+                          传入时：这张图片的缩放 / 平移会被单独记住，
+                                  换图片时各自恢复自己的状态，互不影响；
+                          不传时（视频 / 摄像头的连续帧）：只换画面，
+                                  保持用户当前的缩放和平移不变。
         """
         if cv_img is None:
             return
@@ -71,6 +84,43 @@ class ImageGraphicsView(QGraphicsView):
 
         # 设置场景的矩形边界与图像尺寸一致（使视图能正确居中显示）
         self.setSceneRect(0, 0, w, h)
+
+        # ===== 新增：按图片分别处理缩放 / 平移状态 =====
+        if image_key is None:
+            # 视频 / 摄像头的连续帧：只换画面，用户的缩放、平移保持不动
+            return
+        if image_key == self._current_key:
+            # 还是同一张图片（例如点了"单步执行"重新渲染）：同样保持当前缩放，不要复位
+            return
+
+        # 换到另一张图片了：先把上一张图片的缩放和平移存起来
+        if self._current_key is not None:
+            self._zoom_states[self._current_key] = (
+                self.transform(), self.mapToScene(self.viewport().rect().center())
+            )
+
+        if image_key in self._zoom_states:
+            # 这张图片之前看过：恢复它自己的缩放和平移
+            transform, center = self._zoom_states[image_key]
+            self.setTransform(transform)
+            self.centerOn(center)
+        else:
+            # 第一次看这张图片：复位成默认比例并居中，
+            # 否则会沿用上一张图片的缩放，出现"第二张图也跟着放大"的问题
+            self.resetTransform()
+            self.centerOn(w / 2.0, h / 2.0)
+
+        self._current_key = image_key
+
+    def reset_zoom(self):
+        """
+        把缩放和平移复位成默认状态（1:1 居中显示），并忘记当前图片标识。
+        用于关闭图片 / 视频、打开摄像头时清理视图，避免下次显示时沿用上一次的缩放。
+        """
+        self.resetTransform()
+        self._current_key = None
+        if self.pixmap_item is not None:
+            self.centerOn(self.pixmap_item.boundingRect().center())
 
     def wheelEvent(self, event):
         """重写滚轮事件，实现以鼠标位置为中心的缩放"""
