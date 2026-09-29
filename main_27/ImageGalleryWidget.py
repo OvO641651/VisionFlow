@@ -1,11 +1,13 @@
 from PySide2.QtWidgets import (QWidget, QListWidgetItem, QListWidget,
-                               QApplication, QMainWindow, QVBoxLayout)
-from PySide2.QtCore import Signal, Qt, QSize
+                               QApplication, QMainWindow, QVBoxLayout,
+                               QListView, QAbstractItemView)
+from PySide2.QtCore import Signal, Qt, QSize, QEvent
 from PySide2.QtGui import QPixmap, QImage
 import cv2
 import os
 import sys
 
+# 图像预览进度条 QListWidget 控件
 
 class ImageGalleryWidget(QWidget):
     """
@@ -15,17 +17,33 @@ class ImageGalleryWidget(QWidget):
         接管外部传入的 QListWidget 控件，将其配置为横向排列的缩略图列表。
         提供 add_image 方法，将 OpenCV 的 BGR 图片转换成无文字的纯净缩略图添加到图库。
         当用户点击某个缩略图时，将触发 image_selected 信号，并把该图片的原图数据传送出去，供主窗口切换大图显示。
+
+    注意：
+        本控件已彻底禁用拖拽 / 放置功能（见 eventFilter）。因此只支持"点击缩略图切换大图"，
+        拖动缩略图不会有任何反应，更不会复制 / 移动条目。
+        图库中的图片只能通过 add_image() 主动添加，例如主窗口的"打开"按钮。
     """
 
     # 自定义信号：当点击缩略图时，把原图的数据（OpenCV BGR numpy数组）发送出去
     image_selected = Signal(object)
 
+    # 【修复】需要拦截并丢弃的拖放类事件（配合 eventFilter 使用）
+    _DROP_EVENTS = (QEvent.DragEnter, QEvent.DragMove,
+                    QEvent.DragLeave, QEvent.Drop)
+
     def __init__(self, list_widget, parent=None):
         """
         初始化图库管理器。
         :param list_widget: 外部传入的 QListWidget 控件实例 (UI 拖放的控件)。
-        :param parent: 父级组件。
+        :param parent: 父级组件；不传时自动挂靠到 list_widget 的父容器。
         """
+        # 【修复】parent 缺省时，自动挂靠到图库控件所在的父容器。
+        # 之前 main_27.py 里写的是 ImageGalleryWidget(self.image_gallery)，没有传 parent，
+        # 于是这个 QWidget 就成了"没有父级的顶层窗口"：既可能被系统当成独立窗口，
+        # 生命周期也不随主窗口一起走。这里把父级关系补齐。
+        # 注意：不能直接把 list_widget 当作 parent，否则会把 QListWidget 从原布局里抢走。
+        if parent is None:
+            parent = list_widget.parentWidget()
         super().__init__(parent)
 
         # 接管外部传入的 QListWidget 控件（此处不创建新控件，仅接管）
@@ -43,18 +61,62 @@ class ImageGalleryWidget(QWidget):
         self.gallery_list.setSpacing(8)
         #    IconSize: 强行指定图标显示的尺寸为 80x70 像素。
         self.gallery_list.setIconSize(QSize(80, 70))
-        #    FixedHeight: 固定图库控件自身的高度为 110 像素，防止它撑破主布局。
-        self.gallery_list.setFixedHeight(110)
 
         #    setUniformItemSizes(True) 会强制每一个条目的尺寸严格保持一致。
         self.gallery_list.setUniformItemSizes(True)
 
-        #    缩略图高度为 60，加上上下内边距，85 像素刚好能紧密包裹住图片。去除了下方多余的方形空白区域。
+        #    FixedHeight: 固定图库控件自身的高度为 85 像素，防止它撑破主布局。
+        #    缩略图高度为 60，加上上下内边距，85 像素刚好能紧密包裹住图片，去除了下方多余的方形空白区域。
+        #    【修复】原来这里上面还写了一句 setFixedHeight(110)，紧接着又被 85 覆盖，
+        #            那行永远不生效，属于死代码，已经删除。
         self.gallery_list.setFixedHeight(85)
+
+        # =====================================================================
+        # 【修复】彻底关闭图库控件的拖拽 / 放置功能
+        # ---------------------------------------------------------------------
+        # 现象：图片导入图库后，只要在控件里拖一下（把缩略图拖动，或把外部文件 /
+        #       左侧树里的条目拖进来），图库中就会自动多出一张一模一样的图片。
+        # 原因：QListWidget 继承自 QAbstractItemView，它本身就是拖放目标。其默认
+        #       defaultDropAction 是 Qt.CopyAction，一旦拖放发生，Qt 就会以"复制"
+        #       的方式新增一个条目；而条目里的图标和 UserRole 中保存的原图会被一并
+        #       复制，所以看上去就是凭空多了一张相同的图片。
+        # 处理：① 把相关属性显式关掉，用代码覆盖 .ui 里可能存在的设置；
+        #       ② 再挂事件过滤器把拖放事件直接吞掉（见 eventFilter），双保险，
+        #          这样无论拖放来自哪里，都不可能再往图库里添加条目。
+        # =====================================================================
+        self.gallery_list.setDragEnabled(False)                            # 禁止从本控件把条目拖出去
+        self.gallery_list.setAcceptDrops(False)                            # 禁止接受任何拖入
+        self.gallery_list.setDropIndicatorShown(False)                     # 不显示放置指示线
+        self.gallery_list.setDragDropMode(QAbstractItemView.NoDragDrop)    # 直接关闭拖放模式
+        self.gallery_list.setDefaultDropAction(Qt.IgnoreAction)            # 默认拖放动作改成"忽略"
+        self.gallery_list.setMovement(QListView.Static)                    # 条目位置固定，不允许拖动
+
+        # 拖放事件实际是发给 viewport 的，所以控件本体和 viewport 都要装事件过滤器
+        self.gallery_list.installEventFilter(self)
+        self.gallery_list.viewport().installEventFilter(self)
 
         # 绑定列表内部点击信号槽到自定义的处理函数
         self.gallery_list.itemClicked.connect(self._on_item_clicked)
 
+    def eventFilter(self, watched, event):
+        """
+        事件过滤器：把落在图库控件上的拖放事件全部拦截并丢弃。
+
+        为什么需要它：仅靠 setAcceptDrops(False) 之类的属性设置并不保险，
+        一旦别处（例如 .ui 文件、其它代码，或父控件把拖放事件转发下来）
+        重新打开了拖放开关，条目又会被复制出一份。这里直接返回 True 把事件吃掉，
+        QListWidget 根本没有机会处理拖放，因此绝不会再出现"拖一下就多一张图片"。
+
+        :param watched: 事件发生的对象（图库控件本身，或它的 viewport）。
+        :param event: Qt 传过来的事件对象。
+        :return: True 表示事件已处理完毕，不再向下传递；其它事件交回基类默认处理。
+        """
+        if event.type() in self._DROP_EVENTS:
+            event.ignore()  # 明确拒绝这次拖放
+            return True     # 不再交给 QListWidget 处理，条目不会被复制 / 新增
+
+        # 非拖放事件交回 QWidget 的默认实现，避免影响点击、绘制、滚动等正常功能
+        return super().eventFilter(watched, event)
 
     def add_image(self, cv_img):
         """
