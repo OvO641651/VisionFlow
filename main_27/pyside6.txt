@@ -1552,6 +1552,80 @@ self.result_cache = {}
       连"视频 / 摄像头"也算作单独一个图片槽，有自己独立的一份参数。
 
 
+2026.9.30
+添加多页面流程图的功能：
+修改main.py函数：
+1、添加导入FlowPages.py文件
+2、原来"查找 flowView 并原地替换"的内容修改
+3、添加_bind_current_flow_page()和_on_flow_page_switched()两个函数
+4、_result_cache_key() 改成带上"页面"
+5、on_node_selected() 加了"别被别的页面信号干扰"的保护
+
+添加FlowPages.py文件，具体功能：
+1、添加页面add_page()
+2、重命名页面rename_page()
+3、双击标签就地改名（回车/点到别处保存，Esc 取消）
+rename_page() / _close_title_editor() / eventFilter()
+4、删除页面（带确认框）delete_page()
+5、× 关闭页面（直接关，不确认）close_page() / _on_tab_close_requested()
+6、拖动标签调整页面顺序setMovable + _on_tab_moved()
+7、「+」新建页面_create_add_tab() / add_button
+8、「至少保留一页」保护
+delete_page() / close_page() 里的 len(self.pages)
+
+9、每页独立画布 + 方框表 + 连线表_register_page() / _make_view()
+10、按页面标识认页（setTabData / _page_at）_register_page() / _page_at()
+11、换页回调通知宿主on_page_switched / _notify_switched()
+12、「+」标签永远在最后_ensure_add_tab_last()
+13、新页面自动编号、防重名_unique_title()
+14、退出/销毁防崩溃
+_on_tab_widget_destroyed() + 3 处 except RuntimeError
+
+
+2026.10.1 23:57
+
+一、找回：多页面流程图（FlowPages.py 丢失、main_27.py 回退之后重新添加）
+
+现象：main_27/ 里的 FlowPages.py 整个文件不见了；
+      main_27.py 也退回成"在 __init__ 里 findChild(flowView) 再 replaceWidget 换成 FlowchartView"的旧写法；
+      pyside6.txt 里 9.30 的记录也没了（9.28 的结果缓存、按图参数还在）。
+
+处理：按 9.30 的方案重新加了一遍。
+
+新建 FlowPages.py（FlowPageManager 类）：
+    1、每页一份独立画布 / 方框表 / 连线表；第一页沿用 main.ui 里的 flowView（原地替换，边距比例都继承）
+    2、右键标签栏：添加页面 / 重命名页面 / 删除页面（"删除页面"会先弹确认框）
+    3、双击标签就地改名（标签文字原地变输入框，回车或失焦保存，Esc 取消）
+    4、标签右边的 × ：直接关掉这一页（为了像浏览器那样干脆，不弹确认框）
+    5、鼠标拖动标签调整页面顺序
+       （Qt 是先发 currentChanged、后发 tabMoved，所以"按标签里存的页面标识认页"，
+         不按下标认，拖动换序不会串页）
+    6、最后面一个独立的"+"标签：点它新建一页；它自己有按钮，位置和间距由标签栏自己算
+    7、至少保留一页：只剩一页时关闭 / 删除都会提示"至少要保留一个流程图页面。"
+    8、文件末尾带 __main__ 测试入口，可以 python FlowPages.py 单独试用多页面
+
+修改 main_27.py：
+    1、导入 from FlowPages import FlowPageManager
+    2、__init__ 里那段 findChild(flowView) + replaceWidget 的旧写法，
+       换成创建 FlowPageManager（把 flowWidget、画布工厂、换页回调交给它）+ _bind_current_flow_page()
+    3、新增 _bind_current_flow_page()：把"当前页"的 view / nodes / edges / label 绑到主窗口上，
+       这样原来所有用 self.flow_nodes / self.flow_edges / graphicsView 的代码一句都不用改
+    4、新增 _on_flow_page_switched(new_page, old_page)：
+       存旧页参数 → 绑新页 → 取新页参数 → 刷新底部提示和当前图片
+    5、新增 _result_cache_key(image_key)：检测结果缓存的键从"图片"改成"图片 × 页面"
+       （_show_static_image 取缓存、_execute_static 写缓存都改用它）
+    6、参数存档的键也从"图片"改成"（图片, 页面）"：
+       新增 _params_store_key / _save_node_params / _load_node_params，
+       _switch_image_params 里的存取逻辑改成调用这两个方法
+       （换页回调里页面标识要显式传进去，因为回调进来到时候管理器里的"当前页"已经是新页了）
+    7、on_node_selected 开头加保护：正在增删页面（mgr.switching）、
+       或者选中的节点不在当前页的画布上，就直接忽略，
+       别把当前页的选中状态和底部提示文字清掉
+
+效果：和 9.30 做完时一致 —— 多页面流程图可用，
+      每页的方框 / 连线 / 参数 / 检测结果都互不干扰。
+
+
 
 
 
