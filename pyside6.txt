@@ -1345,7 +1345,84 @@ self.current_image_key = None
 4、调用点同步改名：_show_static_image()、open_camera()、open_file() 的视频分支
 
 
-2026.9.29
+2026.9.29 22:12
+2026.9.29总结：
+1、如何实现每幅图片缩放和绘制检测结果时独立的：
+使用一个图片标识id(frame)来保存图片的状态
+存档/取档：
+self._zoom_states = {}   # {图片标识: (QTransform 变换矩阵, 视图中心对应的场景坐标)}
+self._current_key = None # 现在显示的是哪张图；None = 视频帧 / 还没显示过静态图片
+        # 换到另一张图片了：先把上一张图片的缩放和平移存起来
+        if self._current_key is not None:
+            self._zoom_states[self._current_key] = (
+                self.transform(), self.mapToScene(self.viewport().rect().center())
+            )
+
+        if image_key in self._zoom_states:
+            transform, center = self._zoom_states[image_key]
+            self.setTransform(transform)   # 还原缩放（含倍数）
+            self.centerOn(center)          # 还原"在看图像的哪个位置"
+        else:
+            self.resetTransform()          # 第一次看这张图：1:1
+            self.centerOn(w / 2.0, h / 2.0)# 并且居中
+        self._current_key = image_key
+
+2、如何实现检测结果独立显示，换图后需要重新点击运行按钮后才能显示结果：
+每个节点在自己身上挂一份"按图存的参数字典"：store = getattr(node, 'params_per_image', None)
+切图时做"存旧的 → 清空 → 灌新的:_switch_image_params()函数
+结果缓存独立 —— 决定"显示的是哪张图":
+self.result_cache = {}   # {图片标识: {"frame": 带检测结果的图, "data": 检测数据, "exec_info": 执行日志}}
+写入只在执行按钮路径上发生，读取在切图时
+显示结果图时复用同一个 key —— 让"结果图"继承"这张图的缩放"：
+        self._display_image(work_frame, id(frame))   # 执行时
+        self._display_image(cached["frame"], image_key)  # 从缓存恢复时
+
+
+3、实现每幅图片ROI参数和运行参数的独立
+每个节点的参数只存一份（node.params），它永远只代表"当前这张图"的参数；
+换图时把这份参数收进柜子、腾空、再拿出新图那份。
+
+每个节点身上多挂一个"按图存的柜子"：
+self.params = {}   # 字典类型，存储该节点的参数配置
+
+切图片时（_switch_image_params），对每个节点做三件事：
+store[old_key] = dict(node.params)   # 1、收：把当前这套参数存到上一张图名下
+node.params.clear()                  # 2、腾空
+node.params.update(store[new_key])   # 3、取：把新图那份放回来（没有就保持空）
+
+
+2026.10.1 23:27
+添加多页面流程图FlowPages.py的功能：
+修改main.py函数：
+1、添加导入FlowPages.py文件
+2、原来"查找 flowView 并原地替换"的内容修改
+3、添加_bind_current_flow_page()和_on_flow_page_switched()两个函数
+4、_result_cache_key() 改成带上"页面"
+5、on_node_selected() 加了"别被别的页面信号干扰"的保护
+
+添加FlowPages.py文件，具体功能：
+1、添加页面add_page()
+2、重命名页面rename_page()
+3、双击标签就地改名（回车/点到别处保存，Esc 取消）
+rename_page() / _close_title_editor() / eventFilter()
+4、删除页面（带确认框）delete_page()
+5、× 关闭页面（直接关，不确认）close_page() / _on_tab_close_requested()
+6、拖动标签调整页面顺序setMovable + _on_tab_moved()
+7、「+」新建页面_create_add_tab() / add_button
+8、「至少保留一页」保护
+delete_page() / close_page() 里的 len(self.pages) 
+
+9、每页独立画布 + 方框表 + 连线表_register_page() / _make_view()
+10、按页面标识认页（setTabData / _page_at）_register_page() / _page_at()
+11、换页回调通知宿主on_page_switched / _notify_switched()
+12、「+」标签永远在最后_ensure_add_tab_last()
+13、新页面自动编号、防重名_unique_title()
+14、退出/销毁防崩溃
+_on_tab_widget_destroyed() + 3 处 except RuntimeError
+
+
+
+
 
 
 

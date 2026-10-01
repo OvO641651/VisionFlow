@@ -1,7 +1,7 @@
 import numpy as np
 from PySide2 import QtWidgets
 from PySide2.QtWidgets import (
-    QApplication, QMessageBox, QDialog, QGraphicsView, QFileDialog
+    QApplication, QMessageBox, QDialog, QFileDialog
 )
 # 打开主窗口，显示小窗口，模体ui窗口，设置流程图画布，导入文件
 from PySide2.QtUiTools import QUiLoader # 导入ui
@@ -14,6 +14,7 @@ import os
 
 from Detector import DetectorShape
 from FlowChart import NodeItem, EdgeItem, FlowchartView
+from FlowPages import FlowPageManager
 from LineParamsDialog import LineParamsDialog
 from CircleParamsDialog import CircleParamsDialog
 from ImageGraphicsView import ImageGraphicsView
@@ -126,6 +127,9 @@ class MainWindow:
         # 启用左侧树控件的拖拽功能
         self.main_window.tree.setDragEnabled(True) # 拖动使能，可以拖动里面树枝控件
         self.main_window.tree.setDefaultDropAction(Qt.CopyAction) # 拖拽时的行为是“复制”，而不是“剪切”
+
+        '''
+        """流程图只有单页面的形式"""
         # 获取 UI 中的 graphicsView，替换为 FlowchartView，相对于在用来的基础上创建一个新的 graphicsView，这个新的可以实现拖拽等功能
         # 通过 findChild 找到被 tab 包裹的 flowView 控件
         view_flow = self.main_window.findChild(QtWidgets.QGraphicsView, "flowView")
@@ -143,6 +147,18 @@ class MainWindow:
                 self.main_window.graphicsView = new_view
                 # 每次刷新时全屏更新，防止有拖尾残影
                 self.main_window.graphicsView.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+        '''
+        # 改为"浏览器式"多页面流程图
+        """页面管理（标签页、添加/删除页面、每页自己的方框和连线）都封装在 FlowPages.py 的FlowPageManager 类里，
+        这里只把控件和两个回调交给它。"""
+        self.flow_page_mgr = FlowPageManager(
+            self.main_window.findChild(QtWidgets.QTabWidget, "flowWidget"),
+            view_factory=lambda parent: FlowchartView(parent, main_window=self),
+            on_page_switched=self._on_flow_page_switched,
+        )
+        self.flow_page_mgr.setup()
+        # "当前页"的引用：换页时由 _on_flow_page_switched 整体替换，
+        self._bind_current_flow_page()
 
 
         # 使用 QTableWidget 表格控件来显示运行日志，控件名字 Name 为 execution_log
@@ -342,9 +358,39 @@ class MainWindow:
             node.params_per_image = store
         return store
 
+    def _save_node_params(self, nodes, image_key):
+        """
+        把一批节点的当前参数存到某个图片名下。
+        :param nodes: 要存的节点列表（一般是某一页流程图里的节点）。
+        :param image_key: 图片标识；为 None 表示还没显示过图片/视频，这时不存。
+        """
+        if image_key is None:
+            return
+        for node in nodes:
+            store = self._get_node_params_store(node)
+            snapshot = dict(node.params)
+            # 空字典不存：既省内存，也避免往 params 里灌 None 导致后面切片报错
+            if snapshot:
+                store[image_key] = snapshot
+
+    def _load_node_params(self, nodes, image_key):
+        """
+        把一批节点的参数换成某个图片名下的那一份。
+        :param nodes: 要换参数的节点列表（一般是某一页流程图里的节点）。
+        :param image_key: 图片标识。
+        """
+        for node in nodes:
+            store = self._get_node_params_store(node)
+            # 先清空：这张图片以前没设置过的话，就保持空，
+            # 各处的 .get(参数名, 默认值) 会自动取默认值（ROI 的默认宽高就是当前这张图的尺寸）
+            node.params.clear()
+            snapshot = store.get(image_key)
+            if snapshot:
+                node.params.update(snapshot)
+
     def _switch_image_params(self, new_key):
         """
-        切换当前图片时，把每个节点的运行参数按图片分别存档 / 载入。
+        切换当前图片时，把"当前这一页"每个节点的运行参数按图片分别存档 / 载入。
 
         存档的是节点参数的全部内容：ROI 的 XYHW / XYR（含形状、是否隐藏黄框），以及运行参数，所以每张图片的参数完全独立，互不继承。。
 
@@ -354,25 +400,20 @@ class MainWindow:
             # 还是同一张图片
             return
 
-        old_key = self.current_image_key
-        for node in self.flow_nodes:
-            store = self._get_node_params_store(node)
+        # 1、先把当前页每个节点的参数存到上一张图片名下（只处理"当前页"的节点）
+        self._save_node_params(self.flow_nodes, self.current_image_key)
 
-            # 先把当前这整套参数存到上一张图片名下（空字典则不存）
-            if old_key is not None:
-                saved_old = dict(node.params)
-                if saved_old:
-                    store[old_key] = saved_old
-
-            # 把参数清空，这样新图片会自动回到它自己的参数；
-            node.params.clear()
-
-            # 这张图片之前设置过，就把属于它自己的整套参数恢复回来
-            saved_new = store.get(new_key)
-            if saved_new:
-                node.params.update(saved_new)
+        # 2、再按新图片取参数（这张图片没设置过就会是空，各处自动用默认值）
+        self._load_node_params(self.flow_nodes, new_key)
 
         self.current_image_key = new_key
+
+    def _result_cache_key(self, image_key):
+        """
+        检测结果缓存的键 = 图片 × 流程图页面。
+        这样同一张图片在不同流程图页面上的执行结果也是各自独立的，互不串味。
+        """
+        return (image_key, self.flow_page_mgr.page_key()) # type:ignore
 
     def _show_static_image(self, frame):
         """
@@ -397,8 +438,8 @@ class MainWindow:
         # 传 id(frame) 作为图片标识，保证每张图片的缩放互相独立
         image_key = id(frame)
 
-        # 取这张图片上一次的执行结果
-        cached = self.result_cache.get(image_key)
+        # 取"这张图片 × 这一页流程图"上一次的执行结果
+        cached = self.result_cache.get(self._result_cache_key(image_key))
         if cached is not None:
             # 有缓存：直接显示上次画好检测结果的那张图
             self._display_image(cached["frame"], image_key)
@@ -446,9 +487,10 @@ class MainWindow:
         # 显示处理后的图像；传 id(frame) 让每张图片的缩放互相独立
         self._display_image(work_frame, id(frame))
 
-        # 把这次的结果缓存到这张图片名下,下次切回这张图片时可以直接显示，不用再点一次执行按钮。
+        # 把这次的结果缓存到"这张图片 × 这一页流程图"名下
+        # 下次切回这张图片（或这一页）时可以直接显示，不用再点一次执行按钮。
         # work_frame 本来就是 frame 的独立副本，直接存起来即可。
-        self.result_cache[id(frame)] = {
+        self.result_cache[self._result_cache_key(id(frame))] = {
             "frame": work_frame,
             "data": data,
             "exec_info": exec_info,
@@ -1093,6 +1135,18 @@ class MainWindow:
 
     def on_node_selected(self, node):
         """处理节点选中，当流程图中的节点被单击选中时调用"""
+        # 先看流程图页面管理器的状态，别被"别的页面"发出的信号干扰
+        mgr = getattr(self, 'flow_page_mgr', None)
+        if mgr is not None:
+            if mgr.switching:
+                # 正在添加 / 删除流程图页面：被删页面的 scene 也会发出选中变化信号，
+                # 直接忽略，别让它把"当前页"的选中状态和底部提示文字清掉
+                return
+            if node is not None and mgr.current_page is not None:
+                # 只处理"当前页"画布上选中的节点
+                if node.scene() is not mgr.current_page["view"].scene:
+                    return
+
         self.selected_node = node
         if node:
             # 设置文本控件 label 的文本内容，文本控件的 Name 为 current_node_label
@@ -1213,6 +1267,43 @@ class MainWindow:
         """
         if img_bgr is not None:
             self._show_static_image(img_bgr)
+
+
+    # 流程图多页面（页面管理在 FlowPages.py）
+    def _bind_current_flow_page(self):
+        """把 FlowPageManager 里"当前页"的视图 / 方框 / 连线 / 提示 label 绑到主窗口上"""
+        page = self.flow_page_mgr.current_page
+        if page is None:
+            return
+        self.main_window.graphicsView = page["view"]
+        self.flow_nodes = page["nodes"]
+        self.flow_edges = page["edges"]
+        self.current_node_label = page["label"]
+
+    def _on_flow_page_switched(self, new_page, old_page):
+        """
+        流程图换页时被 FlowPageManager 回调：
+        存旧页节点参数 → 绑定新页 → 取新页节点参数 → 刷新当前图片。
+        （标签页本身的增删、右键菜单都在 FlowPages.py 里）
+        """
+        # 1、离开上一页之前：记下它的选中节点，并把它每个节点的参数存到"当前图片"名下
+        if old_page is not None:
+            old_page["selected_node"] = self.selected_node
+            self._save_node_params(old_page["nodes"], self.current_image_key)
+
+        # 2、把"当前页"的引用换成新页面的
+        self._bind_current_flow_page()
+        self.selected_node = new_page["selected_node"]
+
+        # 3、新页面里每个节点，按"当前图片"取回它自己的参数
+        #    （同一张图片在不同流程图页面上的 ROI / 算法参数也是各自独立的）
+        self._load_node_params(new_page["nodes"], self.current_image_key)
+
+        # 4、刷新底部"当前选中节点"的文字，再重新显示当前图片：
+        #    会取"这一页 × 这张图片"缓存的结果，没有缓存就显示原图
+        self.on_node_selected(self.selected_node)
+        if self.current_static_image is not None:
+            self._show_static_image(self.current_static_image)
 
 
 
