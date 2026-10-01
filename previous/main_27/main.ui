@@ -227,6 +227,11 @@
             </item>
            </layout>
           </widget>
+          <widget class="QWidget" name="tab_4">
+           <attribute name="title">
+            <string>流程图2</string>
+           </attribute>
+          </widget>
          </widget>
         </item>
         <item>
