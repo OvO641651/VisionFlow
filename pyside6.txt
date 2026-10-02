@@ -1,0 +1,1433 @@
+时间为完成对应任务的时间
+
+2026.5.27
+# 使用pyside6必须在QApplication之前先实例化，不然运行后不会显示ui界面
+uiLoader = QUiLoader()
+使用后button这些控件的黄色警告也不会消失
+使用PySide2不会出现该问题，而且引用的button这些控件也不会出现黄色警告。
+
+2026.5.28 9:31
+在终端输入cd 文件名：则可以进入该文件中
+在终端输入以下代码后打包文件：pyinstaller pilotStats.py --noconsole --hidden-import PySide6.QtXml
+pilotStats.py 需要改成自己的文件名
+打开同目录下的dist/pilotStats即可看到exe文件，同时需要将ui文件复制到该目录下才能成功运行
+如果有图片，还需要建图片放到同目录下
+
+不包含任务栏的屏幕大小: 1536 x 824=》768*412
+1919*1030=》959*515
+ui画面窗口大小：1280*720->640*360
+
+2026.5.28 14:00
+设置layout后就不能拉到修改里面控件的尺寸了，
+所以需要在属性里面找到minimumSize和maximumSize来设置尺寸
+
+2026.5.28 15:02
+在设置摄像头提取图片时需要使用timer库，不然会重新一下问题：
+    改用 while ret: 循环：UI会卡死，点击“停止”按钮无效，只能用任务管理器强制结束。
+    每次点击“启动”只读一帧：看到的只是单张快照，不是视频。
+帧率不是由摄像头决定的，而是由定时器间隔 + 实际处理速度共同决定。
+若想充分利用 60 fps 摄像头，可将定时器间隔改为 16 或 15 毫秒，并确保 update_frame 处理耗时小于 16 ms，否则仍然达不到 60 fps。
+
+2026.5.28 15.22
+        # OpenCV BGR -> RGB
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        h, w, ch = rgb_frame.shape
+        qt_img = QImage(rgb_frame.data, w, h, w * ch, QImage.Format_RGB888)
+qt和opencv使用的颜色通道顺序不同，所以需要转换
+
+2026.5.28 20:49
+在主窗口中加载一个新窗口
+    def set_camera_id(self):
+        """设置摄像头ID(数字)"""
+        loader = QUiLoader()
+        widget = loader.load('SetCameraID.ui')
+        if widget is None:
+            return
+
+        dialog = QDialog(self.main_window)
+        dialog.setWindowTitle("摄像头设置")
+        dialog.setModal(True)  # 模态，setcameraID窗口显示后main窗口不能使用
+        dialog.setAttribute(Qt.WA_DeleteOnClose)  # 关闭后自动销毁
+
+        # 将 widget 嵌入 dialog，不使用布局
+        widget.setParent(dialog)
+        widget.move(0, 0)
+
+        # 让 dialog 的大小刚好容纳 widget
+        dialog.resize(widget.size())
+        # 禁止用户缩放对话框（保持固定大小）
+        dialog.setFixedSize(widget.size())
+
+        # 模态显示，直到用户关闭
+        dialog.exec_()
+不使用模态直接加载：
+    def set_camera_id(self):
+        """设置摄像头ID(数字)"""
+        loader = QUiLoader()
+        widget = loader.load('SetCameraID.ui')
+        widget.show()
+        widget.exec()
+
+2026.5.29 11:02
+在menubar -> font -> 修改点大小可以修改最上面菜单栏字体大小
+
+2026.5.29 23:06
+添加树控件
+
+2026.6.6 22.38
+初始化树控件
+# 创建树控件
+self.tree = self.main_window.tree
+树控件的点击控制
+tree.itemClicked.connect(self.print_aaa)
+
+各控件的触发函数：
+控件类 (Widget Class)	主要触发信号 (Signal)	连接代码示例	说明
+QPushButton (按钮)	clicked	button.clicked.connect(self.on_click)	最常用。当用户按下并释放按钮时触发。
+QAction (菜单项、工具栏)	triggered	action.triggered.connect(self.on_action)	菜单栏、工具栏中的条目被点击时触发。
+QTreeWidget (树形列表)	itemClicked	tree.itemClicked.connect(self.on_item_click)	点击某个节点时触发，传递 QTreeWidgetItem* 和 int（列号）。
+QListWidget (列表框)	itemClicked	list.itemClicked.connect(self.on_item_click)	点击列表中的某个条目时触发。
+QTableWidget (表格)	cellClicked	table.cellClicked.connect(self.on_cell_click)	点击某个单元格时触发。参数是 int row, int column。
+QComboBox (下拉列表)	currentIndexChanged	combo.currentIndexChanged.connect(self.on_index_changed)	当用户选择了不同的选项时触发。
+QCheckBox (复选框)	stateChanged	checkbox.stateChanged.connect(self.on_state_change)	复选框状态改变时触发，参数是 int state（Qt.Checked/Qt.Unchecked）。
+QRadioButton (单选按钮)	toggled	radio.toggled.connect(self.on_toggled)	按钮的选中状态改变时触发，参数是 bool checked。
+QSlider (滑块)	valueChanged	slider.valueChanged.connect(self.on_value_change)	滑块值改变时触发，参数是 int value。
+QSpinBox (数字输入框)	valueChanged	spinbox.valueChanged.connect(self.on_value_change)	数值改变时触发，参数是 int value。
+QLineEdit (单行文本框)	returnPressed	line.edit.returnPressed.connect(self.on_return_pressed)	用户在输入框按下回车键时触发。
+QTabWidget (选项卡)	currentChanged	tab.currentChanged.connect(self.on_tab_change)	切换选项卡时触发，参数是 int index（新标签的索引）。
+QGroupBox (分组框)	toggled (若 checkable 启用)	groupbox.toggled.connect(self.on_toggled)	如果分组框设置为 checkable，点击其标题切换选中状态时触发。
+
+2026.6.13 21.56
+编写了Detector类里面的line_detector()函数和circle_detector()函数
+
+2026.6.17 9:18
+通过点击树状图实现检测
+使用的树状图树枝的名字来获取检测消息，如text == '直线'
+    def on_tree_item_clicked(self, item, column):
+        """根据点击树状图的内容（如检测）切换到不同的模式"""
+        text = item.text(0)
+        if text == '直线':
+            self.detection_mode = 'line'
+        elif text == '圆':
+            self.detection_mode = 'circle'
+        else:
+            self.detection_mode = None
+
+2026.6.17 10:53
+利用序号的形式获取检测消息
+        # 获取当前项的 QModelIndex
+        index = self.tree.currentIndex()# 获取当前树控件的页面
+        if not index.isValid():
+            # 如果获取的页面是无效的则退出
+            self.detection_mode = None
+            return
+
+        # 构建从根到当前项的索引路径（元组形式）
+        path = []
+        while index.isValid():
+            # 将获取的项放到列表里面
+            path.insert(0, index.row())
+            index = index.parent()
+        # 转换成元组
+        path_tuple = tuple(path)
+
+        # 根据路径设置检测模式
+        if path_tuple == (0, 0):
+            self.detection_mode = 'line'
+        elif path_tuple == (0, 1):
+            self.detection_mode = 'circle'
+        elif path_tuple == (1, 0):
+            print(11)
+        else:
+            self.detection_mode = None
+
+2026.6.17 13:03
+修改参数树状图，修改成两列
+
+2026.6.17 15:24
+添加tabWidget控件和graphicsView控件
+将graphicsView放到tabWidget的第一页流程图
+将Vider放到tabWidget的第二页vider
+
+2026.6.17 19:57
+在代码中设置tabWidget控件
+# 将代码中的所有 main_window.video 改成 videoLabel
+self.videoLabel = self.main_window.findChild(QtWidgets.QLabel, "video")
+
+2026.6.17 20:45
+创建FlowChart.py准备实现流程图的效果
+
+2026.6.17 22:08
+完成FlowChart.py中的NodeItem节点创建类的编写，并完成测试
+测试：
+        self.setWindowTitle("流程图测试窗口")
+        self.resize(800, 500)
+        # 1. 创建一个图形场景（画布）
+        self.scene = QGraphicsScene()
+        # 2. 创建一个图形视图（显示画布的窗口），并将场景设置进去
+        self.view = QGraphicsView(self.scene)
+        self.setCentralWidget(self.view)
+        node = NodeItem('直线', QPointF(10, 10))
+        self.scene.addItem(node)  # 将节点添加到场景中
+
+2026.6.18 9:30
+完成EdgeItem类的编写，并完成测试
+测试：
+        # 创建贝塞尔曲线连接两个方框，node1的终点连接node2的起点
+        node_end = node1.get_output_pos()
+        node_staet = node2.get_input_pos()
+        edge = EdgeItem(node_staet,node_end)
+        self.scene.addItem(edge)
+问题：方框移动后，曲线没有跟着移动，还是在原来的位置
+
+2026.6.18 12:31
+修复了”方框移动后，曲线没有跟着移动，还是在原来的位置“的问题
+
+2026.6.18 15:31
+完成FlowchartView类的编写
+该类完成自定义流程图视图（支持拖放）的功能
+
+2026.6.18 15:54
+编写FlowchartView类实例，完成创建一个树控件tree和view的ui窗口
+
+2026.6.18 19:31
+完成FlowchartView类实例的编写，可以通过双击左侧的tree界面在右边view界面中创建方框节点
+问题：树状图不能拖动到右侧view窗口中
+
+2026.6.18 19:48
+修复树状图不能拖动到右侧view窗口中的问题
+    def dragMoveEvent(self, event):
+        """
+        必须加上 dragMoveEvent，否则因为 ScrollHandDrag 的干扰，dropEvent 永远不会触发
+        即不能通过拖动实现将左边树状图的树枝拖动到右侧view画布中
+        """
+        event.acceptProposedAction()
+
+2026.6.18 20:06
+修改了FlowchartView的dropEvent()函数，增强了鲁棒性，使代码不受window环境和Pyside2版本的影响
+
+2026.6.18 20:15
+mapToScene：将左边树状图的控件拖到右边view画布时，拖到哪里方框就在哪里创建的核心函数
+
+2026.6.18 20:31
+修复双击第一层树枝时也在view创建方框的问题
+if item.parent() is None:
+    return
+
+2026.6.18 22:00
+添加右键删除流程图中的方框的功能，并整理删除方框后的曲线
+增加contextMenuEvent和delete_flow_node函数
+
+2026.6.18 22:56
+完成将FlowChart的TestWindow的内容移植到main中
+TestWindow中函数有add_flow_node，delete_flow_node，_on_tree_double_click，update_all_edges
+有出错RuntimeError，
+所以略微修改了_on_tree_double_click函数，添加了_create_node_from_name函数配合_on_tree_double_click防止出错
+在main中还添加了：
+_run_flow_pipeline(self, frame)函数还执行流程图的内容
+如果不想要点击树状图进行检测，要使用流程图方框进行检测，则可以删除on_tree_item_clicked()，process_frame()函数
+目前是根据选择树状图后的将点击的检测内容放到一个列表中，然后根据列表的内容进行检测（如列表中有直线和圆，则进行直线和圆检测）
+
+
+2026.6.19 11:00
+查找相机的python SDK文件，没有python版本的
+
+2026.6.19 13:38
+向商家要相机的python SKD，商家没有回复，暂时 放弃
+
+2026.6.19 16:13
+进行多次重新运行程序测试，发现RuntimeError错误，尝试进行修复
+第一种方法：
+        '''
+        current = self.tree.currentItem()
+        if current is None or current.parent() is None:
+            # 如果点击一级树控件，则直接返回，不在view中创建方框控件，根据是子树枝来判断
+            return
+
+        name = current.text(0)  # 获取节点名称
+        '''
+
+        """下面的代码为双重保障。防止出错"""
+        name = None
+        # 优先尝试使用信号自带的 item 参数
+        try:
+            if item is not None and item.parent() is not None:
+                name = item.text(0)
+        except RuntimeError:
+            # 如果 item 已经被底层销毁，静默跳过
+            pass
+        # 如果上面失败了，尝试主动去树控件抓取当前选中项
+        if name is None:
+            try:
+                current = self.tree.currentItem()
+                if current is not None and current.parent() is not None:
+                    name = current.text(0)
+            except RuntimeError:
+                return
+        if name is None:
+            return
+不行，出错的次数减少了，但是还是会有时候出错
+
+再次初始其他方法，这种方法效果比上面的效果还差
+第二种方法：
+    def _on_tree_double_click(self, item, column):
+        """"""
+        QTimer.singleShot(1, self._create_node_from_tree)
+
+    def _create_node_from_tree(self):
+        """
+        双击树状图的树枝后执行的内容
+        _为只有item这个参数，不用管第二个参数(_)，但是第二个参数不能删除
+        有出错RuntimeError，相较于 FlowChart 进行了略微修改
+        """
+        current = self.tree.currentItem()
+        if current is None or current.parent() is None:
+            # 如果点击一级树控件，则直接返回，不在view中创建方框控件，根据是子树枝来判断
+            return
+
+        name = current.text(0)  # 获取节点名称
+        '''计算新方框的摆放坐标'''
+        if self.flow_nodes:
+            # 第二个或者之后方框的位置
+            last_node = self.flow_nodes[-1]
+            new_x = last_node.pos().x()  # + 180 # x方向距离增加180
+            new_y = last_node.pos().y() + 180  # y方向距离不变
+        else:
+            new_x, new_y = 20, 20  # 第一个方框的位置
+        self.add_flow_node(name, QPointF(new_x, new_y))
+
+初步确定不会出现RuntimeError错误，暂时使用该方法
+第三种方法：
+    def _on_tree_double_click(self, item, column):
+        """双击左侧树节点时触发（数据抓取阶段）"""
+        # 获取当前项的 QModelIndex（这是轻量级值，非常安全）
+        index = self.tree.currentIndex()
+        if not index.isValid():
+            return
+        # 判断是否是根节点（一级标题），如果是则不放行
+        parent = index.parent()
+        if not parent.isValid():
+            return
+        # 直接通过 index 获取节点名称（安全的纯文本数据，并非指针）
+        node_name = index.data(0)
+        if not node_name:
+            return
+        # 只有 1 毫秒的延迟，把“文本数据”而不是“C++对象”传给创建函数
+        QTimer.singleShot(1, lambda: self._create_node_from_name(node_name))
+    def _create_node_from_name(self, name):
+        """
+        双击树状图的树枝后执行的内容
+        _为只有item这个参数，不用管第二个参数(_)，但是第二个参数不能删除
+        有出错RuntimeError，相较于 FlowChart 进行了略微修改
+        """
+        '''计算新方框的摆放坐标'''
+        if self.flow_nodes:
+            # 第二个或者之后方框的位置
+            last_node = self.flow_nodes[-1]
+            new_x = last_node.pos().x()  # + 180 # x方向距离增加180
+            new_y = last_node.pos().y() + 180  # y方向距离不变
+        else:
+            new_x, new_y = 20, 20  # 第一个方框的位置
+        self.add_flow_node(name, QPointF(new_x, new_y))
+
+2026.6.19 16:39
+对以上的RuntimeError错误进行分析总结和整理
+错误产生原因：PySide2在 C++ 和 Python 之间传递对象指针时，发生了“时间差冲突”。
+1、当你双击时，信号传递进来的参数 item 只是一个“C++ 对象的指针”。
+这个指针极不稳定，可能在你双击的瞬间，Qt 底层已经判断这个事件完成了，就提前把该 C++ 对象销毁了。
+2、紧接着 Python 代码执行到 item.text(0) 时，由于背后的 C++ 对象已经销毁，程序立刻崩溃。
+
+修复：
+方案一：try-except 双层兜底（减少出错，但未根治）
+原理：先尝试用信号传参 item，失败后尝试用 self.tree.currentItem()，再失败则放弃。
+分析：虽然使用了 try-except 拦截了崩溃，但本质上它仍然在“触碰不稳定的指针”。
+self.tree.currentItem() 返回的也是一个极易过期的 C++ 指针。
+如果 Qt 底层在你调用 current.text(0) 的那一毫秒内突然把它销毁了，拦截机制也救不了，依然会报错。
+这种属于“物理防御”，治标不治本。
+
+方案二：QTimer.singleShot + 延迟访问 currentItem()（效果反而更差）
+原理：延迟 1 毫秒执行，期望底层指针在这个时间段内稳定下来，然后再去抓取 self.tree.currentItem()。
+分析：在 PySide2 中，QTimer.singleShot 会把执行权交给 “下一轮 Qt 事件循环”。
+当你双击树控件时，整个控件可能正在进行复杂的重新排列或状态更新，currentItem() 指针甚至会在这场事件循环中被重置为 None 或无效对象。
+因此，这种方法极其不可靠。
+
+方案三：提取 QModelIndex 数据 + 传递字符串
+原理：
+1、抛弃不稳定指针：完全不用 QTreeWidgetItem，改用 self.tree.currentIndex()
+2、同步提取纯文本：在第一时间（异步定时器触发前）使用 index.data(0) 直接提取出“直线”或“圆”这个纯 Python 字符串。
+3、只传字符串，不传对象：通过 lambda 把字符串 node_name 传给延时函数。
+分析：因为 C++ 对象只能被销毁一次，但提取出来的 Python 字符串（node_name）是永久存在 Python 内存里的，不会被 C++ 底层“偷偷销毁”。
+
+2026.6.23 19:23
+添加一个打开文件夹导入图片或者视频的按钮open_button，原本的open_button按钮改名为camera_button
+完成open_file()函数的编写，该函数用于实现打开文件夹并导入图片或者视频
+完成_process_and_display_frame()函数的编写，该函数用于实现对导入的图片或者视频根据树状图的控件进行处理
+_process_and_display_frame()函数的内容为原本update_frame()函数的内容，但是复制到了_process_and_display_frame()
+但是_process_and_display_frame是用于图像处理与UI渲染器的，update_frame()函数是用于处理数据采集与生命周期控制的
+在__init__里面添加_is_video_file变量，用来判断是否打开的文件为视频文件
+
+2026.6.23 19:35
+处理视频和摄像头时会出现冲突
+所以在open_camera()函数中添加了判断，如果在播放视频时打开摄像头(点击"启动"键)，则自动关闭视频
+        if self.cap is not None and self.cap.isOpened() and self._is_video_file:
+            self.close_camera()
+在close_camera()函数中添加重置视频标注
+self._is_video_file = False
+
+2026.6.23 21:26
+修改update_frame()函数，去除原本的OpenCV -> Qt 转换代码
+通过调用_process_and_display_frame()函数实现OpenCV -> Qt 转换
+原因：
+不同的数据源（摄像头、视频、图片）都需要处理并显示，所以使用了一个函数统一进行处理
+存在问题：
+1、先直线检测再圆检测的结果 和 先圆检测再圆检测的结果不同(可忽略，效果运用在流程上时为想要的效果)
+2、类中函数顺序问题
+目前能实现打开文件导入图片和视频的功能，并能根据流程图完成检测
+
+2026.6.24 19:49
+修改FlowChart中的update_path()函数
+        # 点在左右两条边上时使用
+        dx = abs(self.end.x() - self.start.x()) * 0.5
+        ctrl1 = QPointF(self.start.x() + dx, self.start.y())
+        ctrl2 = QPointF(self.end.x() - dx, self.end.y())
+/**/
+        # 点在上下两条边上时使用
+        dy = abs(self.end.y() - self.start.y()) * 0.5 # * 0.5 可以使曲线平滑，不乘也可以
+        ctrl1 = QPointF(self.start.x(), self.start.y() + dy)
+        ctrl2 = QPointF(self.end.x(), self.end.y() - dy)
+
+2026.6.24 20:25
+super.mouseMoveEvent()中super为交给父类处理的意思
+比如def mouseMoveEvent(self, event)是重写mouseMoveEvent这个类，
+然后最后super.mouseMoveEvent()，意思是def函数里面没写到的内容按照父类的逻辑处理。
+
+
+2026.6.24 21:06
+在FlowChart.py文件的FlowchartEvent类中添加mousePressEvent(),mouseMoveEvent(),mouseReleaseEvent(),
+_start_connection(),_try_finish_edge(),_cancel_connection()函数，
+实现点击蓝点拖出曲线到红点连接的功能
+
+2026.6.24 21:22
+修改EdgeItem类
+将start改成start_node，将end改成end_node，规范化
+在update_path()函数中添加：
+        # 实时获取启动和终点
+        start = self.start_node.get_output_pos()
+        end = self.end_node.get_input_pos()
+修改update_positions()函数
+
+2026.6.24 21:27
+在NodeItem类中添加：
+self.setAcceptHoverEvents(True) # 允许鼠标悬停
+
+2026.6.24 22:30
+修改TestWindow类中的add_flow_node(),delete_flow_node(),update_all_edges(),_on_tree_double_click()函数
+添加add_edge()函数
+add_flow_node()函数：删除自动创建连线部分和QTimer.singleShot()
+add_edge()函数：从蓝点开始生成一条曲线
+delete_flow_node()函数：重写该函数，实现删除与需要删除的节点相连接的曲线
+update_all_edges()：重写该函数
+_on_tree_double_click()函数：按照main.py的方式进行修改
+
+2026.6.24 22:41
+在FlowChart.py文件中实现从一个方框中引出多条曲线的功能
+
+2026.6.25 9:29
+修改main.py文件中的add_flow_node(),delete_flow_node(),update_all_edges()函数
+添加add_edge()函数
+在main.py中实现从一个方框中引出多条曲线的功能
+
+2026.6.25 20:10
+修改Detector.py文件，添加def gray()函数，实现对图片的灰度转换
+如果在流程图中已经有了gray模块，再使用直线或者圆检测，则会出错，
+原因是因为再直线和圆检测内的cv2.cvtColor()函数输入的是三通道图像，如果输入的是已经完成了灰度转换的图像，则是单通道的
+修改line_detector()和circle_detector()函数，如果输入的是单通道图片，则不执行函数内的灰度转换
+        if len(img.shape) == 2:
+            gray = img
+        else:
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+2026.6.25 20:46
+修改FlowChart类中的EdgeItem类，添加contextMenuEvent()函数，实现对连接曲线的删除功能
+在主函数中添加delete_edge()函数，实现对连接曲线的删除功能
+
+2026.6.25 21:35
+对图像先进行灰度转换再进行直线检测，和对图像先进行直线检测再进行灰度转换的区别：
+先进行灰度转换再进行直线检测时：获得的是灰度图，检测出的直线为黑色
+先进行直线检测再进行灰度转换时：获得的是灰度图，直线为绿色经灰度转换后的颜色(亮灰色)
+
+2026.6.25 22:36
+修复删除方框后对应的检测内容依然在图片上显示的bug
+在__init__中添加self.current_static_image = None存储当前加载的静态图片
+在open_file()函数中添加self.current_static_image = frame保存当前加载的静态图片
+在close_camera()函数中添加self.current_static_image = None关闭时清空静态图片缓存
+在add_flow_node(),add_edge(),delete_flow_node(),delete_edge()函数中都添加：
+        # 如果当前有静态图片，立刻用更新后的流程图重绘
+        if self.current_static_image is not None:
+            self._process_and_display_frame(self.current_static_image)
+存在问题：删除直线检测和圆检测的方框后不能去除图片上对应的内容，
+删除灰度转换后可以去除图片的灰度，回复到彩色图片
+
+2026.6.25 22:52
+对于上面的问题，原因是：
+OpenCV 的 cv2.line 和 cv2.circle 等绘图函数，是直接在传入的 numpy 数组（内存地址）上修改的，不会自动产生副本。
+修改_process_and_display_frame()函数，添加work_frame = frame.copy()，然后将frame都改成work_frame
+拷贝一份图像
+
+2026.6.25 23:00
+不需要点击树状图对于的树枝来执行对于的检测，现在是只按照流程图的内容来执行对于的检测
+注释了on_tree_item_clicked()和process_frame()函数
+注释了树状图点击事件# self.main_window.tree.itemClicked.connect(self.on_tree_item_clicked)
+注释了self.detection_mode = None # 当前检测模式，用于点击树状图执行对于的检测
+修改了_process_and_display_frame()函数的逻辑：点击树状图时画面不变，按照原来的画面显示
+work_frame, data = work_frame, []# work_frame, data = self.process_frame(work_frame)
+
+2026.6.26 23:00
+思考怎么按照树状图流程进行检测
+存在问题：
+1、检测没有按照流程图连线顺序进行，而是按照方框拖入到画布的顺序进行。
+比如先拖入灰度转换再拖入直线检测，他的检测顺序是先灰度转换再直线检测。不是按照流程图的连线进行的
+2、将方框拖到画布上后没有进行连线，也会进行检测。需要的是按照连线的顺序进行检测。
+
+2026.6.28 10:17
+修改_run_flow_pipeline函数，实现按曲线顺序进行检测，而不是按照方框创建顺序进行检测，如果没有连线时则不进行检测
+存在问题：
+1、对于多分枝时，如直线->灰度A，灰度B->圆两条分支，节点创建顺序为直线，灰度A，灰度B，圆
+但是最后的执行顺序为：直线 -> 灰度B -> 灰度A -> 圆，最后全部检测内容叠加在同一副图上
+考虑添加一个“导入图片”的模块，用于专门针对某一个分支进行导入图片，参考vision master
+2、没有连线时不执行任何检测，只有一个节点时也不执行任何检测
+
+2026.6.28 15:57
+重新设计ui，添加一个tabWidget控件，一个原来存放流程图flow，一个原来存放图像video
+修改代码，view = self.main_window.findChild(QtWidgets.QGraphicsView, "flowView")
+将原本的graphicsView改成flowView
+创建的两个tabWidget只要保证里面的名字不一样就不用进行区分
+因为：是通过findChild()来查找里面的名字的，只要名字不一样就不需要区分
+
+2026.7.14 23:00
+问题：运行代码时不执行代码，而是运行了测试
+修复：最上面的当前文件 -> 编辑配置 -> 点击+号，添加新配置 -> python 
+-> script中添加需要执行的代码文件 E:/opencv_python_3_8/PySide/FlowChart.py
+-> 工作目录选择当前的文件目录E:\opencv_python_3_8
+-> 可以修改名字为当前需要执行文件的名字
+方法二：
+在终端中输入cd E:\opencv_python_3_8\PySide进入需要执行的文件的位置
+-> 回车执行
+-> 输入 python main.py 执行对于的文件
+
+2026.7.15 15:48
+问题：方法 'on_node_double_clicked' 可能为 'static'
+原因：函数参数中有self，但是函数内没有使用到self
+修复：随便设置一个self.abc = 3，不使用
+
+2026.7.15 19:48
+添加双击流程图中方框节点时输出11，22，33的效果
+在FlowChart.py中的NodeItem类中添加mouseDoubleClickEvent()函数，实现双击节点触发的功能
+在main.py函数中添加on_node_double_clicked()函数，实习点击对应的点实现输出对应的功能
+
+2026.7.15 21:00
+问题：在FlowChart.py文件内运行时双击流程图方框节点时出错
+修改：在TestWindow类中添加on_node_double_clicked()函数，测试时不会出错。
+
+2026.7.20 14:17
+开始使用Qt设计师设计直线检测窗口，实现双击流程图直线方框节点后出现该窗口
+修改TabWidget中分页的名字：修改currentTabText参数中的名字，不是Name参数，
+Name参数是用于代码中查找控件名字的，Text参数是用于显示的名字。
+
+2026.7.21 10:52
+拆分布局layout方法：选择布局内的控件 -> 右键 -> 布局 -> 分拆布局
+
+2026.7.21 11:01
+0 图像源1.图像的设计：选择Combo Box控件 -> 选择placeholderText属性 -> 
+设置文字"0 图像源1.图像的设计"
+
+2026.7.21 20:00
+实现左右滑动块的效果：使用左右滑动条Horizontal Slider控件，
+实现代码为LineParamsDialog类的_apply_slider_style()函数
+
+2026.7.21 20:07
+运行代码后QcomboBox控件的文字"0 图像源1.图像的设计"，
+修复：在代码中添加self.input_source.addItem("0 图像源1.图像")，即添加一个下拉框QcomboBox的内容
+
+2026.7.22 11:50
+完成LineParamsDialog.ui中基本参数页面的ui设计
+调整layout布局
+存在问题未解决：拖动窗口界面跟随移动的问题未解决
+
+2026.7.22 14:20
+修改LineParamsDialog.ui中控件的参数命名
+
+2026.7.22 14:29
+在ui中实现左右滑动块的效果，原本为在代码中实现该功能
+实现步骤：ui界面中找到ComboBox控件 -> 找到styleSheet属性 -> 输入以下代码
+即可在ui属性中实现该效果
+QSlider::groove:horizontal {
+            border: none;
+            background: #cccccc;
+            height: 18px;
+            border-radius: 9px;
+            margin: 0px 0px 0px 0px;
+            min-width: 40px;
+        }
+        QSlider::handle:horizontal {
+            background: #ffffff;
+            border: 1px solid #a0a0a0;
+            width: 16px;
+            height: 16px;
+            margin: -8px 0px; 
+            border-radius: 8px;
+        }
+        QSlider::sub-page:horizontal {
+            background: #e67e22;
+            border-radius: 9px;
+        }
+
+2026.7.22 14:38
+修改"ROI参数"按钮的样式：背景变成透明，去除按钮的灰色背景，文字变成灰色
+修改步骤：现在按钮控件 -> 找到flat属性 -> 打勾 -> 找到styleSheet属性 -> 输入以下代码
+QPushButton {
+    background-color: transparent;
+    border: none;
+    color: #666666; /* 对应图中的浅灰色 */
+    font-weight: bold;
+    text-align: left;
+}
+
+2026.7.22 14:59
+去除警告的方法：
+代码中出现黄色警告时：在代码后添加 # type:ignore 注释
+代码中出现灰色波浪线警告时：在代码后添加 # iqna 注释
+
+2026.7.23 17:31
+完成直线检测ui窗口LineParamsDialog.py代码的书写
+内容包含：
+类LineParamsDialog
+_load_params(self)函数：从 node.params 加载参数到 UI 控件，并使用当前图像尺寸作为默认值
+_update_params(self)函数：从 UI 控件保存参数到 node.params
+on_run(self)函数：点击执行：保存参数 -> 重新处理图像
+on_ok(self)函数：点击确定：执行一次并关闭窗口
+toggle_roi_params(self)函数：点击"ROI参数"这个按钮后触发，切换 "ROI参数" 区域的展开与折叠状态，并同步修改按钮图标
+_update_roi_params_visibility(self)函数：根据“ROI创建”的单选框状态(选择绘制 或者 继承)，控制展开按钮及参数区域的显示与隐藏
+_update_shape_layout(self, shape_text)函数：根据形状下拉框当前选中的文字，动态更新参数框的标签名和可见性
+
+2026.7.23 19:21
+修改Detector.py文件
+line_detector()函数：添加roi_offset_x=0, roi_offset_y=0这两个参数，实现直线检测区域的偏移 的功能
+代码中添加：
+# 把相对于子图的坐标，加上偏移量，转化为主图的真实坐标
+                x1 += roi_offset_x
+                y1 += roi_offset_y
+                x2 += roi_offset_x
+                y2 += roi_offset_y
+circle_detector()函数：添加roi_offset_x=0, roi_offset_y=0这两个参数，实现直线检测区域的偏移 的功能
+代码中修改：circle_data.append((x + roi_offset_x, y + roi_offset_y, r))，加上偏移量
+
+2026.7.23 19:29
+修改FlawChart.py文件，添加一个字典，用来存储该节点的参数配置
+self.params = {} # 字典类型，存储该节点的参数配置
+
+2026.7.23 20:30
+修改main.py文件文件
+添加导入from LineParamsDialog import LineParamsDialog类
+修改_run_flow_pipeline()函数，添加绘制ROI窗口的功能，并修改if node.name == "直线"等执行内容
+修改on_node_double_clicked()函数，添加双击直线节点时弹出窗口的功能
+
+2026.7.23 20:41
+略微修改的main.ui
+删除了最右边的树状图，调整了图像窗口label的大小
+
+2026.7.23 21:08
+存在问题：如果创建流程图节点后先双击了节点使其弹出窗口，再打开图片，会导致读取到的ROI参数不正确，
+原图片的尺寸为512*512，但是显示为默认值480*640。
+先打开图片再创建节点，或者先创建节点但是先不双击节点使其弹出窗口，而是直接打开图片再双击节点，
+则不会出现这样的问题。
+修复：
+在LineParamsDialog.py中添加一个公共刷新方法refresh_size()函数
+在main.py中：
+      添加变量self.current_dialog = None  # 用于记录当前是否打开了配置窗口
+在on_node_double_clicked()函数中添加：
+            # 记录当前激活的对话框，并绑定关闭时清空引用的信号
+            self.current_dialog = dialog
+            dialog.finished.connect(lambda: self._clear_current_dialog())
+添加_clear_current_dialog()函数:
+    def _clear_current_dialog(self):
+        """对话框关闭时，清除内部持有的引用"""
+        self.current_dialog = None
+修改open_file()函数：
+            # 如果此时刚好有配置窗口开着，通知它刷新尺寸为图片的实际大小！
+            if self.current_dialog and self.current_dialog.isVisible():
+                self.current_dialog.refresh_size()
+
+如果点击了"确定"的话，图片改变了数值也不会变化
+直接点击×，则数值会随图片的变化而变化
+
+
+2026.7.23 21:34
+存在问题：直线检测会检测到ROI绘制出的矩形框的边界
+修复：
+将绘制矩形放到绘制检测出直线的代码的后面
+即将：
+        # 在原图上画出 ROI 矩形框（黄色）
+        cv2.rectangle(img, (roi_x, roi_y), (roi_x + roi_w, roi_y + roi_h), (0, 255, 255), 2)
+放到if node.name == "直线"这些判断之后
+
+2026.7.23 22:11
+在LineParamsDialog.ui里面添加了一个可以隐藏绘制出的黄框的复选框
+该复选框命名为cb_hide_roi
+在LineParamsDialog.py文件中
+获取复选框：
+        # 获取屏蔽形状的复选框
+        self.cb_hide_roi = self.ui.findChild(QCheckBox, "checkBox")
+加载到ui中，在_load_params()函数中添加以下代码：
+            # 加载复选框状态 (如果节点没保存过，默认设为 False 即显示黄框)
+            if self.cb_hide_roi:
+                self.cb_hide_roi.setChecked(params.get("hide_roi", False))
+保存 UI 到节点，在_update_params()文件中添加以下代码：
+            # 将复选框状态写入节点参数
+            if self.cb_hide_roi:
+                self.node.params["hide_roi"] = self.cb_hide_roi.isChecked()
+在main.py文件中:
+            # 从节点参数中读取是否要隐藏黄框 (默认为 False，即不隐藏，显示黄框)
+            hide_roi = params.get("hide_roi", False)
+            
+            if not hide_roi:
+                # 在原图上画出 ROI 矩形框（黄色），只有 hide_roi 为 False 时才会画
+                cv2.rectangle(img, (roi_x, roi_y), (roi_x + roi_w, roi_y + roi_h), (0, 255, 255), 2)
+
+2026.7.23 22:38
+存在问题：流程图是一样的，都是直线->圆检测，但是隐藏绘制出的黄色矩形和不隐藏黄色矩形的圆检测结果却不同。
+这可能是因为绘制的矩形影响到了下一次循环中的圆检测的过程。
+修复：
+所有算法都跑完了，再统一画上去。
+修改main.py中的_run_flow_pipeline()函数:
+添加一个变量来存放需要绘制的黄色框：rois_to_draw = []
+在循环中记录：rois_to_draw.append((roi_x, roi_y, roi_w, roi_h, hide_roi))
+最后循环结束后统一绘制：for rx, ry, rw, rh, hide in rois_to_draw
+
+2026.7.24 10:41
+问题：创建pushButton按钮控件时，默认为透明背景的显示
+原因：不小心设置了全局的styleSheet，
+修复：点击最外层的背景，找到styleSheet属性，删除里面的内容
+
+2026.7.24 20:10
+添加功能：
+在LineParamsDialog.py中添加了"框选"按钮的功能，可以通过在图片上自行框选想要检测的区域。
+具体修改：
+添加ROISelectGraphicsView类：
+用于在弹窗中显示图片并绘制框选的画布
+mousePressEvent()函数：鼠标按下事件
+mouseMoveEvent()函数：鼠标拖动事件
+mouseReleaseEvent()函数：鼠标释放事件
+get_roi()函数：获取框选的坐标 (x, y, w, h)
+
+添加ROISelectDialog类:
+用于参加框选 ROI 的独立对话框
+
+修改LineParamsDialog类的内容：
+添加一个pushButton按钮控件
+on_select_click()函数：点击"框选"按钮触发的功能
+
+修改LineParamsDialog.py中的main函数，添加可以实现上面按钮框选的功能，进行测试
+
+
+2026.7.25 9:45
+获取控件并执行点击clicked槽信号的方法的区别：
+1、直接通过self.main_window来找到控件并执行点击槽信号：
+“self.main_window.camera_button.clicked.connect(self.open_camera) # 开启摄像头按钮”
+PySide2 内部提供的一个非常方便的语法糖（动态属性访问）
+
+2、先findChlid获取控件名字，再执行槽信号：
+self.btn_step = self.main_window.findChild(QtWidgets.QPushButton, "btn_step_execute")
+self.btn_step.clicked.connect(self.on_step_execute)
+这种方法好处：
+如果 UI 里找不到 btn_step_execute，findChild 会返回 None，可以防止系统崩溃
+在初始化阶段统一获取并缓存为类属性，后续的代码直接操作这些属性，是更快、更符合面向对象的封装规范
+
+2026.7.25 9:56
+修改代码中的信号槽事件，按照先通过find child获取控件name名字，再执行点击chlicked槽事件
+修改了camera_button，close_button，open_button这三个按钮
+
+2026.7.25 11:16
+修改main.ui：
+在main.ui中添加了两个pushbutton按钮，一个的名字text为单步执行，Name为btn_step_execute，
+另一个的名字text为连续执行，Name为btn_continuous_execute，
+还添加了一个label文本框，Name为lbl_current_node。
+
+准备添加以下功能添加功能：
+当点击某个流程图方框节点时，文本框label会显示出”当前选中的节点为：直线/圆/灰度“等；
+点击单步执行按钮后，根据label文本框中显示的选中的节点来执行这个节点的检测，不管流程图中其他的流程，只执行选中的节点；
+点击连续执行后，会按照流程图的步骤依次从头到尾地执行，和当前的逻辑一样，只是添加了一个按钮控制。
+
+
+2026.7.25 13:22
+修改FlowChart.py文件中的FlowchartView类：
+设置监听场景中选中节点的变化事件：
+self.scene.selectionChanged.connect(self.on_selection_changed)
+添加选中节点函数on_selection_changed(self)
+
+修改测试类FlowChartWindow实现对应的显示选中节点的功能：
+初始化状态栏：self.statusBar().showMessage("当前选中节点：无")
+添加单击节点函数on_node_selected(self, node)
+
+与main.py中的对应功能实现的区别：
+main.py使用的是一个单独的label文本框
+FlowChartWindow.py中测试使用的是状态栏showMessage
+
+
+2026.7.26 13:24
+修改main.py文件：
+1、通过findchild查找添加的2个按钮btn_step，btn_continuous和1个文本框current_node_label
+2、设置对应的点击槽事件self.btn_step.clicked.connect，self.btn_continuous.clicked.connect()
+3、设置初始化选中节点变量，用来显示当前单击选中的节点self.selected_node = None
+4、添加当流程图中的节点被单击选中时调用函数on_node_selected()
+5、添加点击单步执行按钮时触发：只执行当前选中的节点函数on_step_execute()
+6、添加点击连续执行按钮时触发：按整个流程图顺序执行函数on_continuous_execute()
+7、添加专门用于单步执行：仅对一个节点做 ROI 裁剪和处理_run_flow_pipeline_step()函数
+8、修改_process_and_display_frame()函数，将展示图片的内容单独写成一个函数_display_image()，方便单步执行时调用
+
+2026.7.26 13:35
+存在问题：打开图片，然后添加节点后，再点击关闭窗口，会出现RuntimeError错误
+原因：直接关闭窗口时，Qt 开始销毁主窗口，它顺带会销毁主窗口里面的 FlowchartView 画布控件，
+在销毁的过程中，Qt 内部有时候还会触发 selectionChanged（选择变化）信号，
+此时 Python 里的 on_selection_changed 函数被调用，执行到 selected_items = self.scene.selectedItems() 时，
+发现 self.scene 指向的底层 C++ 对象已经不存在了，立刻崩溃并抛出 RuntimeError
+修改：在FlowChart.py文件的FlowchartView类中的on_selection_changed()函数中添加try-except预防错误
+
+2026.7.26 15:06
+优化代码：
+添加_process_single_node函数，用来单独处理单个节点的通用检测逻辑
+修改_run_flow_pipeline()函数和_run_flow_pipeline_step()函数，分别调用_process_single_node函数
+
+2026.7.26 16:19
+修改main.py文件，添加在视频/摄像头中也能实现单步执行和连续执行的功能：
+添加变量：self.video_processing_mode = "continuous"和self.video_step_node = None
+修改单步执行函数on_step_execute()，添加处理视频的逻辑
+修改连续执行函数on_continuous_execute()，添加处理视频逻辑
+修改update_frame()函数，添加判断是单步执行还是连续执行的逻辑
+将update_frame()中最后处理与显示函数由_process_and_display_frame()函数换成_display_image()函数
+_process_and_display_frame()函数：复制 + 处理(完整流程) + 显示，适用于静态图片场景
+_display_image()函数：仅显示，适用于视频流、摄像头实时流
+
+2026.7.26 18:16
+存在问题：在视频或者摄像头状态时，节点的框选区域功能不能使用
+修复：修改LineParamsDialog.py文件中LineParamsDialog类的框选函数on_select_click()，
+点击框选后弹出是图片画面是当前视频的一帧画面，用这一帧画面来框选检测区域
+
+
+2026.7.26 18:30
+存在问题(?)：直线绘制的结果可能会影响到后续的圆检测
+该问题是否合理，前面的结果是否需要对后面的结果产生影响
+
+在工业视觉软件中，希望的结果为前一个节点对后一个节点不产生影响
+
+2026.7.26 22:37
+修改main.py和Detector.py文件，
+修改成每个节点独立运行的功能，前面的节点检测的内容不会对后面节点的检测结果产生影响
+修改Detector.py，添加gray_with_preserve_lines()函数，
+保证检测出的结果绘制在图片最上面，不会被灰度转换成灰色
+废弃了原本的gray()转灰度灰色，使用新的gray_with_preserve_lines()函数
+
+修改main.py文件中的_process_single_node(),_run_flow_pipeline(),_run_flow_pipeline_step()这三个函数
+如果想恢复原本的每个节点可以相互影响的功能，可以使用main_20的版本中的这三个函数
+
+2026.7.26 22:53
+存在问题：如果画布中有图片的情况下打开摄像头，
+然后对节点点击单步执行的按钮，会出现一帧导入的图片的画面
+原因：打开摄像头没有清除图片的缓存
+修改：修改main.py文件中的open_camera()函数，
+打开摄像头open_camera时立即执行一次close_camera清空画布上的画面
+
+2026.7.27 10:55
+删除LineParamsDialog_22.py文件中LineParamsDialog类的on_run(),on_ok()函数
+添加on_step_click(),on_cont_click(),on_ok()三个函数
+实现点击该ui窗口的执行和连续执行两个按钮也能实现对应的单步和连续执行的功能
+修改LineParamsDialog_22.py文件中测试类MockMainWindow类：
+防止调用main.py文件中的函数时时抛出 AttributeError 错误
+
+2026.7.27 16:50
+main_23_1文件：
+在LineParamsDialog窗口中，选择形状为圆时，单纯使用圆内的区域作为ROI区域
+因为图像在计算机底层必定是“矩阵（矩形数组）”，
+所以在技术上无法直接裁剪出一个非矩形的像素块传给算法，需要通过“掩膜（Mask）”技术，
+但是使用掩膜技术时灰度gray的算法有需要重写
+算法复杂，故最终采用的是使用圆的外接矩形的方法来获取ROI区域的方法
+
+2026.7.27 19:50
+修改LineParamsDialog.py文件：
+导入import QBrush, QGraphicsEllipseItem # 画布，绘制椭圆形(圆)
+
+修改ROISelectGraphicsView类：
+添加以下参数：
+self.center_point = None  # 圆形的圆心
+        self.ellipse_item = None  # 记录圆形对象，ellipse：椭圆(圆为特殊的椭圆)
+        self.center_dot_item = None  # 记录圆心点对象
+        self.final_ellipse = None  # 圆形最终数据 (cx, cy, r)
+修改mousePress(),mouseMove(),mouseRelease()三个函数
+修改get_roi()函数
+
+修改ROISelectDialog类：
+添加判断"矩形"还是"圆"的变量：shape_type="矩形"，并添加到
+
+修改LineParamsDialog类：
+修改_update_params()函数：
+添加self.node.params["roi_shape"] = self.shape_combo.currentText()用来保存当前形状类型
+修改on_select_click()函数：添加圆类型
+
+修改main.py文件：
+修改_process_single_node()函数：
+添加变量：roi_shape = params.get("roi_shape", "矩形") # 标记当前绘制ROI区域的形状
+添加返回值roi_shape
+
+修改_run_flow_pipeline()和_run_flow_pipeline_step()函数：添加绘制圆的逻辑
+
+2026.7.27 20:11
+存在问题：选择了形状为圆，但是每次重新双击节点进入参数窗口后，
+会自动显示形状为矩形，需要重新选择圆
+修改：修改LineParamsDialog.py文件中的_load_params()函数，添加：
+saved_shape = params.get("roi_shape", "矩形")
+self.shape_combo.setCurrentText(saved_shape)
+
+2026.7.28 9:47
+修改LineParamsDialog.ui，添加 运行参数 页面的内容：
+添加了5个label文本框，添加了5个spinbox微调数值框，添加了1个groupBox控件（运行参数文本的显示）
+
+修改LineParamsDialog.py：
+利用find child导入5个spinbox数值微调框
+修改_update_params()函数，保存ui界面中spinbox的参数
+修改_load_params()函数，加载参数到ui界面中的spinbox中
+
+修改main.py：
+修改_process_single_node()函数直线的检测逻辑，添加detector.line_detector()函数中的输入参数
+
+
+2026.7.28 9:57
+存在问题：打开直线查找窗口后，弹出的窗口默认是"运行参数"的界面，我想要的是"基本参数"的窗口
+修改：
+方法一：在ui文件中点击到"基本参数"的窗口，然后点击保存，再退出ui文件
+方法二：使用代码强制显示"基本参数界面"，
+self.ui.tabWidget.setCurrentIndex(0)设置tabWidget控件的索引为0
+
+
+2026.8.7 8:58
+修改LineParamsDialog.ui，添加 显示结果 页面的内容：
+添加了2个label文本框，添加了1个groupBox控件（显示结果文本的显示）
+
+修改LineParamsDialog.py文件：
+获取文本label控件，显示直线的label(label_7)默认显示的文本为：0
+self.label_result_count = self.ui.findChild(QLabel, "label_7")
+        if self.label_result_count:
+            self.label_result_count.setText("0") # 初始化置0
+
+每次打开LineParamsDialog.ui窗口，会保存并显示检测的数量，
+不会因为关闭了窗口就需要重新点击执行才能显示
+ if self.main_window and hasattr(self.main_window, 'last_detected_data'):
+            self._update_result_count(self.main_window.last_detected_data)
+
+添加_update_result_count()函数，用来接收data数据更新直线数量显示
+修改on_step_click(),on_cont_click()两个个函数，用来接收并更新data数据
+
+修改main.py文件：
+修改__init__：添加一个变量用来保存检测结果
+self.last_detected_data = None
+
+修改_process_single_node()函数：用data来存储检测到的直线，并在返回值中添加data
+data = []  # 【新增】初始化数据列表
+processed_roi, data  = self.detector.line_detector()
+return img, (roi_x, roi_y, roi_w, roi_h, hide_roi, roi_shape), data
+
+修改连续执行 _run_flow_pipeline() 和单步执行 _run_flow_pipeline_step()两个函数：
+添加一个列表用来接收数据，并在返回值中添加返回data
+all_data = []  # 【新增】汇总数据列表
+ if not self.flow_nodes or not self.flow_edges:
+            return img, all_data
+return img, all_data
+
+img, roi_info, data = self._process_single_node(img, clean_img, target_node)
+return img, data
+
+修改主界面的单步on_step_execute/连续执行on_continuous_execute函数:
+添加一下这一段内容
+self.last_detected_data = data  # 保存给以后打开的窗口使用
+            if self.current_dialog and self.current_dialog.isVisible():
+                self.current_dialog._update_result_count(data)
+            return
+
+修改视频流 update_frame()函数：
+data = []  # 【新增】初始化数据列表
+# ===== 【新增】实时更新配置窗口的计数 =====
+        if self.current_dialog and self.current_dialog.isVisible():
+            self.current_dialog._update_result_count(data)
+
+
+2026.8.7 9:13
+存在问题：访问类的 protected 成员_update_result_count
+修改：删除所有_update_result_count中最前面的_
+改成update_result_count
+有_表示类内保护的方法，删除_后变成公开的方法
+
+2026.8.7 9:20
+存在问题：
+未使用局部变量'data'的值
+未使用形参'item'的值
+未使用形参'column'的值
+
+修改：
+删除第一个警告中的data
+item修改成_item
+column修改成_column
+在参数名称前加一个下划线 _，告诉编辑器：“我知道这个参数没被用到，但我必须写在这里，请忽略警告
+
+
+2026.8.10 22:06
+修改LineParamsDialog.ui文件，将最大直线间隙文本label_10修改成max_line_gap
+
+2026.8.12 9:12
+添加双击圆节点弹出圆检测参数窗口CircleParamsDialog
+实现修改圆检测参数，和显示检测出的圆的数量的功能
+实现：
+添加CircleParamsDialog.py文件，该文件继承直线窗口的文件LineParamsDialog.py
+在文件中添加修改"运行参数"和"显示结果"的页面，"基本参数"页面保持不动
+
+修改main.py文件中的双击节点事件函数on_node_double_clicked()
+和圆检测流程图逻辑函数_process_single_node()
+在文件开头导入CircleParamsDialog.py类
+
+修改LineParamsDialog.py文件，添加修改窗口的名字的代码：
+# 修改窗口的名字 Text
+self.setWindowTitle("直线检测")
+
+2026.8.12 14:11
+存在问题：
+CircleParamsDialog.py文件中存在一些导入类都是未使用的情况
+修改：
+删除了导入未使用的类
+
+2026.8.13 16:46
+存在问题：
+当会ROI参数都为0时点击执行/连续执行/确定，出现ValueError错误
+修改：
+当ROI参数为0时弹出一个小窗口提示"请输入ROI区域"
+修改LineParamsDialog.py中的on_step_click()和on_cont_click()函数
+添加判断ROI区域并拦截的判断：
+if self.spin_roi_w.value() == 0 or self.spin_roi_h.value() == 0:
+
+在on_step_click()函数中添加返回值True和Flase，防止点击"确定"按钮后会退出检测窗口
+return False
+return True
+
+修改on_ok()函数：
+判断on_step_click()函数的返回值是True还是Flase
+
+修改main.py函数中的_process_single_node()函数：
+尺寸为0时的判断中添加一个返回值
+        if roi_img.size == 0:
+            return img, None, []  # 跳过尺寸为0的异常情况
+
+
+2026.8
+不要写死result_data_table这个控件的标题，直线检测可以用起点XY，都是如果我用的是灰度这个节点，
+这个XY就没有用，如果我之后添加其他的比如图像取反算法后这个XY也没有用了，所以不要写死。
+我现在先简单的做以下的内容：如图片所示，这个一个其他视觉软件的案例，参考这个图片实现如果现在的流程图中存在流程，
+并且我点击了连续执行的按钮，则如图所示显示，比如我现在的流程图为”直线->圆->灰度“，
+则显示“执行序号(1)，执行时间；模块(直线);结果数据(检测到10条直线)；”
+
+2026.8.18 15:02
+在main.ui中添加QTabelWidget控件来显示运行日志，
+并修改main.py和LineParamsDialog.py文件实现对于的功能，
+点击连续执行按钮会在日志表格中显示运行的序号，时间，模块，结果。点击单步执行按钮暂时不考虑
+
+修改main.ui：
+添加QTabelWidget控件，并设置objectName 为 execution_log，设置 columnCount 为 4，
+双击表头，依次输入：执行序号、执行时间、模块、结果数据
+
+修改main.py：
+添加导入时间库import time
+
+在 __init__ 中初始化表格
+新增_update_execution_log 方法（填充表格）
+
+修改 _run_flow_pipeline：
+# 没有节点 or 没有连线
+        if not self.flow_nodes or not self.flow_edges:
+            return img, all_data, []  # 新增返回空日志
+
+	exec_info = []  # 新增：执行日志列表
+	seq = 1 # 新增序号
+
+# ========== 新增：无论有无数据都记录日志（从 if data 中移出） ==========
+            if node.name == "直线":
+                result_text = f"检测到{len(data)}条直线"
+            elif node.name == "圆":
+                result_text = f"检测到{len(data)}个圆"
+            elif node.name == "灰度":
+                result_text = "执行成功"
+            else:
+                result_text = f"执行成功（{len(data)}条结果）"
+            time_str = time.strftime("%H:%M:%S")
+            exec_info.append((seq, time_str, node.name, result_text))
+            seq += 1
+
+修改返回值return img, all_data, exec_info  # 返回三个值
+
+修改调用 _run_flow_pipeline 的地方：
+修改 _process_and_display_frame 中的调用
+修改 update_frame 中的连续执行分支
+修改 on_continuous_execute 中的静态图片分支
+
+修改LineParamsDialog.py文件：
+修改 on_cont_click 函数中的静态图片分支，增加接收 exec_info 并刷新主窗口表格
+# ========== 新增：适应 _run_flow_pipeline 返回三个值 ==========
+work_frame, data, exec_info = self.main_window._run_flow_pipeline(work_frame)  # noqa
+self.main_window._update_execution_log(exec_info)  # 新增：刷新主窗口日志表格
+
+2026.8.19 22:07
+修改main.ui文件，设置全屏布局，
+上下分为 按钮区 和 实现区，
+实现区左中右分为 树状图、流程图 和 显示部分；
+
+2026.8.19 22:13
+存在问题：在qt设计师里面已经设置了layout，但是中间流程图部分代码运行的出现了错误，
+在main.py文件中运行后全屏，流程图控件QGraphicsView的大小并没有变大，而且下面的label文本框也不见了
+
+原因：main.py代码中的
+geometry = view.geometry() # 获取这个画布当前所在的位置和大小
+将流程图的大小设置死了，导致布局layout无效
+
+修改：
+修改main.py中初始化__init__
+将获取flowView控件部分替换成下面的内容：
+view = self.main_window.findChild(QtWidgets.QGraphicsView, "flowView")
+        if view:
+            # 直接获取父级布局
+            parent_layout = view.parentWidget().layout()
+            if parent_layout:
+                # 实例化新的 FlowchartView，使用和旧控件相同的父容器
+                new_view = FlowchartView(view.parentWidget(), main_window=self)
+                # 使用布局引擎的 replaceWidget 原地替换，拉伸比例、边距都会被完美继承
+                parent_layout.replaceWidget(view, new_view)
+                # 彻底销毁旧控件，释放内存
+                view.deleteLater()
+                # 保存新控件的引用，以便代码中后续使用
+                self.main_window.graphicsView = new_view
+                # 每次刷新时全屏更新，防止有拖尾残影
+                self.main_window.graphicsView.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+
+总结：ui没有问题，那可能是代码中设置了硬性要求
+
+
+2026.8.19 22:23
+修改main.py中的main函数，使运行时自动将窗口最大化
+修改：
+def main():
+    # 开启高DPI缩放支持（必须在 QApplication 创建之前设置）
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+    app = QApplication([])
+    app.setWindowIcon(QIcon('image/lena.png'))
+    window = MainWindow()
+    # 窗口启动时直接最大化
+    window.main_window.showMaximized()  # 替换掉原来的 window.main_window.show()
+    app.exec_()
+
+2026.8.20 8:47
+存在问题：每次点击一下执行/连续执行后图像窗口都会变大，
+在视频或者摄像头时尤为明显，放大后的图像将布局破坏了
+
+原因：QLabel控件的布局震荡（Layout Oscillation）
+
+修改：添加QSizePolicy，QSize两个类的导入；
+
+修改通过find child获取video控件的部分：
+# ===== 新增修复：设置视频标签的尺寸策略，阻止布局震荡 =====
+        self.videoLabel.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self.videoLabel.setMinimumSize(1, 1)
+
+修改_display_image()函数：防止刚开始未分配尺寸时导致出错
+
+
+2026.8.20 21:16
+实现使用GraphicsView控件代替 Qlabel 控件显示图像画面的功能
+修改main.ui文件：使用GraphicsView控件代替 Qlabel 控件
+
+添加ImageGraphicsView类：实现专门用于显示图像并可缩放/平移的自定义视图
+set_image()函数：原本main.py文件中_display_image()函数的内容，将其移动到ImageGraphicsView类中
+wheelEvent()函数：重写滚轮事件，实现以鼠标位置为中心的缩放
+
+修改main.py文件：
+导入ImageGraphicsView类
+获取控件：view_video = self.main_window.findChild(QtWidgets.QGraphicsView, "graphicsView_video")
+修改获取流程图控件的名字为flowView，原本为View，流程图和图像显示都是使用的GraphicsView控件
+修改_display_image()函数，调用ImageGraphicsView 类的 set_image 方法
+修改close_camera()函数：
+        # 清空 QGraphicsView 的画面
+        if hasattr(self, 'image_view') and self.image_view is not None:
+            # 清空场景
+            self.image_view.scene().clear()
+            # 将 pixmap_item 重置为 None，防止下次打开图片时残留引用出错
+            self.image_view.pixmap_item = None
+
+
+2026.9.29 10:50
+修改main.ui文件：
+添加 图像预览进度条 QListWidget 控件
+
+添加ImageGalleryWidget.py文件：
+用于配置 QListWidget 控件
+
+存在问题：图片导入图库（ImageGalleryWidget）后，只要在控件里拖动一下缩略图，
+或者把外部文件、左侧树里的条目拖进来，图库里就会自动多出一张一模一样的图片。
+
+原因：QListWidget 继承自 QAbstractItemView，它本身就是拖放目标，
+而且它的 defaultDropAction 默认就是 Qt.CopyAction，
+所以拖放完成时 Qt 会以"复制"的方式新增一个条目；
+条目里的图标和 item.setData(Qt.UserRole, cv_img) 里保存的原图会被一起复制，
+看起来就是凭空多了一张相同的图片。
+
+修改：在修改ImageGalleryWidget. __init__ 中关闭拖放，并给控件本身和它的 viewport 都装上事件过滤器
+
+2026.9.29 11:05
+修改main.py文件：
+导入ImageGalleryWidget类：from ImageGalleryWidget import ImageGalleryWidget
+
+添加初始化QListWidget控件：
+self.image_gallery = self.main_window.findChild(QtWidgets.QListWidget, "image_gallery")
+
+修改open_file()函数：
+            # 把读取到的图片加到图库里
+            if hasattr(self, 'gallery_widget'):
+                self.gallery_widget.add_image(frame)
+
+添加_on_gallery_image_selected()用户点击图库中的图片时，切换主画面显示函数
+
+2026.9.29 15:28
+修改main.py文件，实现点击"打开"按钮后可以对多幅图片或视频进行导入：
+添加导入import os
+修改open_file()函数：
+QFileDialog.getOpenFileName()（结尾没有 s），它只返回一个文件路径
+QFileDialog.getOpenFileNames() 可以选择多幅图片
+
+2026.9.29 15:42
+修改ImageGraphicsView.py文件：图像画布中每张图片的放大缩小互相独立
+存在问题：导入了2张图片，在第1张图片里滚动鼠标滚轮放大，再点击第2张图片，
+          第2张图片也跟着放大了（沿用了上一张图片的缩放）。
+
+修改：
+在init中添加
+self._zoom_states = {}
+self._current_key = None
+
+set_image()函数中增加 image_key 参数，并添加以下代码：
+        if image_key is None:
+            return                      # 视频帧：保持当前缩放
+        if image_key == self._current_key:
+            return                      # 同一张图片重绘：保持当前缩放
+        if self._current_key is not None:
+            self._zoom_states[self._current_key] = (
+                self.transform(), self.mapToScene(self.viewport().rect().center())
+            )
+        if image_key in self._zoom_states:
+            transform, center = self._zoom_states[image_key]
+            self.setTransform(transform)
+            self.centerOn(center)
+        else:
+            self.resetTransform()
+            self.centerOn(w / 2.0, h / 2.0)
+        self._current_key = image_key
+
+添加reset_zoom() 函数，把缩放 / 平移复位（关闭图片、打开摄像头时清理视图）
+
+
+修改main.py文件：
+1、修改_display_image()函数，添加image_key参数
+2、显示静态图片时传 id(原图) 作为标识；update_frame() 显示视频帧时不传（保持缩放不动）
+3、close_camera() 里增加 self.image_view.reset_zoom()，
+   避免关闭图片后再打开视频，还沿用上一张图片的缩放。
+
+
+2026.9.29 16:42
+删除"连好线就自动显示检测结果"，改为只有点执行按钮才显示
+存在问题：流程图中只要连上2个以上节点，图像上就自动出现检测结果，
+          希望改成只有点过"单步执行"/"连续执行"之后才显示。
+
+原因：add_flow_node()、add_edge()、delete_flow_node()、delete_edge() 四个函数末尾都有
+      if self.current_static_image is not None:
+          self._process_and_display_frame(self.current_static_image)
+      流程图一改动，就自动跑一遍检测并重绘。
+
+修改main_27.py文件：
+1、把这四个函数末尾的自动重绘代码全部删掉
+2、删掉原来的 _process_and_display_frame() 函数，换成两个新函数：
+   _show_static_image(frame, apply_last_exec=True)   显示静态图片
+   _execute_static(frame, mode, node=None)           对一张静态图片执行检测并显示
+3、"单步执行"、"连续执行"两个按钮的静态图片分支改成调用 _execute_static()
+   self._execute_static(self.current_static_image, "step", self.selected_node)
+   self._execute_static(self.current_static_image, "continuous")
+   原来这两个按钮各自写了一遍"复制图片、跑管道、显示、刷新日志"的代码，
+   现在统一收进 _execute_static()，行为保持一致。
+
+
+2026.9.29 16:45
+切换图片后，需要重新点击执行按钮后才能显示检测结果，
+如果是同一副图像，那么会保存上一次的绘制结果。
+
+修改main_27.py文件：
+1、删掉 __init__ 里的 last_exec_mode / last_exec_node 两个成员
+2、_show_static_image() 去掉 apply_last_exec 参数和自动重算的分支，现在只做两件事：
+   记住当前图片 + 只显示原图
+    def _show_static_image(self, frame):
+        if frame is None:
+            return
+        self.current_static_image = frame
+        self._switch_image_roi(id(frame))      # ROI 参数按图片分别存档 / 载入（见下面第二点）
+        self._display_image(frame.copy(), id(frame))
+3、_execute_static() 不再记录"上次执行方式"
+4、_on_gallery_image_selected()（点图库缩略图）和 open_file()（导入图片）都只调用 _show_static_image()
+
+2026.9.29 16.46
+把 ROI 这类参数按图片分开存档，每一幅图像的ROI参数独立保存
+
+修改main.py文件：
+1、MainWindow 类里新增两个类属性和一个"当前图片标识"成员
+# 需要"按图片分开存"的参数，都是 ROI 相关的；
+# 算法参数（canny 阈值、hough 阈值等）仍然是所有图片共用的。
+ROI_PARAM_KEYS = ("roi_x", "roi_y", "roi_w", "roi_h", "roi_shape", "hide_roi")
+# 视频 / 摄像头也当成一个"图片槽"，它自己的 ROI 参数单独存一份
+VIDEO_ROI_KEY = "video"
+# 静态图片用 id(原图)；视频/摄像头用 VIDEO_ROI_KEY；None 表示还没显示过任何图片/视频
+self.current_image_key = None
+
+2、新增 _get_node_roi_store(node)：取某个节点"按图片分别保存的 ROI"字典，没有就现场建一个
+    node.roi_per_image = {图片标识: {roi_x, roi_y, roi_w, roi_h, roi_shape, hide_roi}}
+
+3、新增 _switch_image_roi(new_key)：切换图片时对每个节点做三步
+    def _switch_image_roi(self, new_key):
+        if new_key == self.current_image_key:
+            return                      # 还是同一张图片，不用动
+        old_key = self.current_image_key
+        for node in self.flow_nodes:
+            store = self._get_node_roi_store(node)
+            # 1、把当前这批 ROI 参数存到上一张图片名下（只存真正设置过的键，避免存进 None）
+            if old_key is not None:
+                saved_old = {k: node.params[k] for k in self.ROI_PARAM_KEYS if k in node.params}
+                if saved_old:
+                    store[old_key] = saved_old
+            # 2、把 ROI 参数从 node.params 里清掉，
+            #    这样打开配置窗口时，对话框会用"新图片的尺寸"重新算默认值（0, 0, 宽, 高）
+            for k in self.ROI_PARAM_KEYS:
+                node.params.pop(k, None)
+            # 3、这张图片之前框选过，就把它自己的 ROI 参数恢复回来
+            saved_new = store.get(new_key)
+            if saved_new:
+                node.params.update(saved_new)
+        self.current_image_key = new_key
+
+4、_show_static_image() 里，显示图片前先调用 _switch_image_roi(id(frame))
+5、打开摄像头（open_camera）和打开视频（open_file 的视频分支）时调用
+   _switch_image_roi(self.VIDEO_ROI_KEY)，让视频 / 摄像头也有自己独立的一份 ROI
+
+
+2026.9.29 16:47
+每一幅图像的运行参数独立保存，修改了图片1的运行参数，切换到图片2后运行参数不会继承
+
+修改main_27.py文件：把"只保存 ROI 参数"改成"保存整个参数字典"
+1、删掉 ROI_PARAM_KEYS（原来是 ("roi_x","roi_y","roi_w","roi_h","roi_shape","hide_roi")）
+2、_get_node_roi_store 改名为 _get_node_params_store，
+   节点上的属性 node.roi_per_image 改名为 node.params_per_image
+3、_switch_image_roi 改名为 _switch_image_params，改成整份参数存档
+        if old_key is not None:
+            saved_old = dict(node.params)     # 整个参数字典都存下来
+            if saved_old:
+                store[old_key] = saved_old
+        node.params.clear()                   # 清空，让新图片回到它自己的参数
+        saved_new = store.get(new_key)
+        if saved_new:
+            node.params.update(saved_new)
+4、调用点同步改名：_show_static_image()、open_camera()、open_file() 的视频分支
+
+
+2026.9.29 22:12
+2026.9.29总结：
+1、如何实现每幅图片缩放和绘制检测结果时独立的：
+使用一个图片标识id(frame)来保存图片的状态
+存档/取档：
+self._zoom_states = {}   # {图片标识: (QTransform 变换矩阵, 视图中心对应的场景坐标)}
+self._current_key = None # 现在显示的是哪张图；None = 视频帧 / 还没显示过静态图片
+        # 换到另一张图片了：先把上一张图片的缩放和平移存起来
+        if self._current_key is not None:
+            self._zoom_states[self._current_key] = (
+                self.transform(), self.mapToScene(self.viewport().rect().center())
+            )
+
+        if image_key in self._zoom_states:
+            transform, center = self._zoom_states[image_key]
+            self.setTransform(transform)   # 还原缩放（含倍数）
+            self.centerOn(center)          # 还原"在看图像的哪个位置"
+        else:
+            self.resetTransform()          # 第一次看这张图：1:1
+            self.centerOn(w / 2.0, h / 2.0)# 并且居中
+        self._current_key = image_key
+
+2、如何实现检测结果独立显示，换图后需要重新点击运行按钮后才能显示结果：
+每个节点在自己身上挂一份"按图存的参数字典"：store = getattr(node, 'params_per_image', None)
+切图时做"存旧的 → 清空 → 灌新的:_switch_image_params()函数
+结果缓存独立 —— 决定"显示的是哪张图":
+self.result_cache = {}   # {图片标识: {"frame": 带检测结果的图, "data": 检测数据, "exec_info": 执行日志}}
+写入只在执行按钮路径上发生，读取在切图时
+显示结果图时复用同一个 key —— 让"结果图"继承"这张图的缩放"：
+        self._display_image(work_frame, id(frame))   # 执行时
+        self._display_image(cached["frame"], image_key)  # 从缓存恢复时
+
+
+3、实现每幅图片ROI参数和运行参数的独立
+每个节点的参数只存一份（node.params），它永远只代表"当前这张图"的参数；
+换图时把这份参数收进柜子、腾空、再拿出新图那份。
+
+每个节点身上多挂一个"按图存的柜子"：
+self.params = {}   # 字典类型，存储该节点的参数配置
+
+切图片时（_switch_image_params），对每个节点做三件事：
+store[old_key] = dict(node.params)   # 1、收：把当前这套参数存到上一张图名下
+node.params.clear()                  # 2、腾空
+node.params.update(store[new_key])   # 3、取：把新图那份放回来（没有就保持空）
+
+
+2026.10.1 23:27
+添加多页面流程图FlowPages.py的功能：
+修改main.py函数：
+1、添加导入FlowPages.py文件
+2、原来"查找 flowView 并原地替换"的内容修改
+3、添加_bind_current_flow_page()和_on_flow_page_switched()两个函数
+4、_result_cache_key() 改成带上"页面"
+5、on_node_selected() 加了"别被别的页面信号干扰"的保护
+
+添加FlowPages.py文件，具体功能：
+1、添加页面add_page()
+2、重命名页面rename_page()
+3、双击标签就地改名（回车/点到别处保存，Esc 取消）
+rename_page() / _close_title_editor() / eventFilter()
+4、删除页面（带确认框）delete_page()
+5、× 关闭页面（直接关，不确认）close_page() / _on_tab_close_requested()
+6、拖动标签调整页面顺序setMovable + _on_tab_moved()
+7、「+」新建页面_create_add_tab() / add_button
+8、「至少保留一页」保护
+delete_page() / close_page() 里的 len(self.pages) 
+
+9、每页独立画布 + 方框表 + 连线表_register_page() / _make_view()
+10、按页面标识认页（setTabData / _page_at）_register_page() / _page_at()
+11、换页回调通知宿主on_page_switched / _notify_switched()
+12、「+」标签永远在最后_ensure_add_tab_last()
+13、新页面自动编号、防重名_unique_title()
+14、退出/销毁防崩溃
+_on_tab_widget_destroyed() + 3 处 except RuntimeError
+
+
+
+
+
+
+
+
+
+
+
+
